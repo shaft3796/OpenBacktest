@@ -3,11 +3,11 @@ from statistics import mean
 import matplotlib.pyplot as plt
 import numpy as np
 from OpenBacktest.ObtUtility import divide, Colors, remove_fees, parse_timestamp
-from datetime import datetime
+from OpenBacktest.ObtPositions import PositionBook, LongPosition
 
 
 class Wallet:
-    def __init__(self, coin_name, token_name, coin_balance, token_balance, taker, maker, dataframe=None):
+    def __init__(self, coin_name, token_name, coin_balance, token_balance, taker, maker, dataframe):
         # Initial coin balance ( will not be modified )
         self.ini_coin_balance = coin_balance
         # Initial token balance ( will not be modified )
@@ -23,59 +23,115 @@ class Wallet:
         # Represent the current trade if there is an opened position
         self.last_trade = None
         # Represent all trades
-        self.trades_list = []
+        self.position_book = PositionBook()
         # Dataframe
         self.dataframe = dataframe
 
         # Informative values, these values are initialized but will be calculated by make_data() function
+        # name of the coin
         self.coin_name = coin_name
+        # symbol of the token
         self.token_name = token_name
+        # coin profit
         self.profit = 0
+        # coin profit in %
         self.percent_profit = 0
+        # total fees
         self.total_fees = 0
+        # number of total trades
         self.total_trades = 0
+        # number of total positive trades
         self.total_positives_trades = 0
+        # number of total negative trades
         self.total_negatives_trades = 0
+        # Ratio of positive trades against number of total trades ( winrate )
         self.positives_trades_ratio = 0
+        # number of total negative trades
         self.negatives_trades_ratio = 0
-        self.worst_trade = 0
-        self.best_trade = 0
+        # Worst trade
+        self.worst_trade = None
+        # Best
+        self.best_trade = None
+        # Average positive trades profit
         self.average_positive_trades = 0
+        # Average negative trades profit
         self.average_negative_trades = 0
+        # Average trades profit
         self.average_profit_per_trades = 0
+        # Last close time
+        self.end = None
+        # First close time
+        self.start = None
+        # total day of backtest
+        self.total_inday_trading_time = None
+        # first close price
+        self.first_price = None
+        # last close price
+        self.last_price = None
+        # Buy & hold profit from start time to end time
+        self.buy_and_hold_profit = None
+        # Buy & hold profit in % from start time to end time
+        self.buy_and_hold_percent_profit = None
+        # Strategy profit vs buy & hold profit
+        self.strategy_vs_buy_and_hold = None
+        # Strategy profit vs buy & hold profit in %
+        self.strategy_vs_buy_and_hold_percent = None
+        # Average profit per day
+        self.average_profit_per_day = None
+        # aver profit per day in %
+        self.average_percent_profit_per_day = None
 
-    def buy_all(self, price, dataframe=None, index=None):
-        # Updating data
-        if dataframe is not None and index is not None:
-            self.last_trade = {"buy": {"timestamp": dataframe["timestamp"][index], "price": dataframe["close"][index],
-                                       "balance": self.coin_balance}}
+    def buy(self, index, amount=None, percent_amount=None):
+        if amount is None:
+            if percent_amount is None:
+                amount = self.coin_balance
+            else:
+                amount = self.coin_balance*divide(percent_amount, 100)
+        else:
+            if amount > self.coin_balance:
+                amount = self.coin_balance
+
+        # Updating Position Book
+        # opening a new Position
+        position = LongPosition()
+        position.open(self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance, amount)
+        self.position_book.add_position(position)
 
         # Buying
-        self.token_balance = remove_fees(divide(self.coin_balance, price), self.maker, self)
-        self.coin_balance = 0.0
+        self.token_balance = remove_fees(divide(amount, self.dataframe["close"][index]), self.maker, self)
+        self.coin_balance = self.coin_balance-amount
 
-    def sell_all(self, price, dataframe=None, index=None):
+    def sell(self, index, amount=None, percent_amount=None):
+        if amount is None:
+            if percent_amount is None:
+                amount = self.token_balance
+            else:
+                amount = self.token_balance*divide(percent_amount, 100)
+        else:
+            if amount > self.token_balance:
+                amount = self.token_balance
+
         # Selling
-        self.coin_balance = remove_fees(self.token_balance * price, self.maker, self)
-        self.token_balance = 0.0
+        old_coin_balance = self.coin_balance
+        self.coin_balance = remove_fees(self.token_balance * self.dataframe["close"][index], self.maker, self)
+        self.token_balance = self.token_balance-amount
 
-        # Updating data
-        if dataframe is not None and index is not None:
-            self.last_trade["sell"] = {"timestamp": dataframe["timestamp"][index], "price": dataframe["close"][index],
-                                       "balance": self.coin_balance}
-            # closing trade
-            self.trades_list.append(self.last_trade)
+        # Updating Position Book
+        # loading current Position
+        position = self.position_book.last_position
+        # closing the position
+        position.close(self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance, self.coin_balance-old_coin_balance)
 
     # Make the required data to display wallet
     def make_data(self):
         # Total number of trades
-        self.total_trades = len(self.trades_list)
+        self.total_trades = self.position_book.last_position_index + 1
         # return if there were no trades
         if self.total_trades == 0:
             return
 
-        # --- Profit ---
-        self.profit = (self.ini_coin_balance - self.coin_balance) * -1
+        # --- Total Profit ---
+        self.profit = self.coin_balance - self.ini_coin_balance
         # Profit in percent depending of initial coin balance
         self.percent_profit = divide(100 * self.profit, self.ini_coin_balance)
 
@@ -89,40 +145,32 @@ class Wallet:
         trades_profit = []
         trades_percent_profit = []
 
-        for trade in self.trades_list:
-            # Profit of the current trade
-            trade_profit = (trade["buy"]["balance"] - trade["sell"]["balance"]) * -1
-            # Profit of the current trade in percent
-            percent_trade_profit = divide(100 * trade_profit, trade["buy"]["balance"])
+        for position in self.position_book.book:
 
             # Count positive & negative trades and collect data to make average positive & negative trades profit
-            if trade_profit > 0:
-                positive_trades_profit.append(trade_profit)
-                positive_trades_percent_profit.append(percent_trade_profit)
+            if position.trade_profit > 0:
+                positive_trades_profit.append(position.trade_profit)
+                positive_trades_percent_profit.append(position.percent_trade_profit)
                 self.total_positives_trades += 1
-            elif trade_profit < 0:
-                negative_trades_profit.append(trade_profit)
-                negative_trades_percent_profit.append(percent_trade_profit)
+            elif position.trade_profit < 0:
+                negative_trades_profit.append(position.trade_profit)
+                negative_trades_percent_profit.append(position.percent_trade_profit)
                 self.total_negatives_trades += 1
 
             # Collect data to make average positive & negative trades profit
-            trades_profit.append(trade_profit)
-            trades_percent_profit.append(percent_trade_profit)
+            trades_profit.append(position.trade_profit)
+            trades_percent_profit.append(position.percent_trade_profit)
 
             # Initializing worst_trade & best_trade values with the first trade
-            if self.worst_trade == 0 or self.best_trade == 0:
-                self.worst_trade = {"timestamp": (trade["buy"]["timestamp"], trade["sell"]["timestamp"]),
-                                    "profit": (trade_profit, percent_trade_profit)}
-                self.best_trade = {"timestamp": (trade["buy"]["timestamp"], trade["sell"]["timestamp"]),
-                                   "profit": (trade_profit, percent_trade_profit)}
+            if self.worst_trade is None or self.best_trade is None:
+                self.worst_trade = position
+                self.best_trade = position
             # Updating best_trade
-            if percent_trade_profit > self.best_trade["profit"][1]:
-                self.best_trade = {"timestamp": (trade["buy"]["timestamp"], trade["sell"]["timestamp"]),
-                                   "profit": (trade_profit, percent_trade_profit)}
+            if position.percent_trade_profit > self.best_trade.percent_trade_profit:
+                self.best_trade = position
             # Updating worst_trade
-            if percent_trade_profit < self.worst_trade["profit"][1]:
-                self.worst_trade = {"timestamp": (trade["buy"]["timestamp"], trade["sell"]["timestamp"]),
-                                    "profit": (trade_profit, percent_trade_profit)}
+            if position.percent_trade_profit < self.worst_trade.percent_trade_profit:
+                self.worst_trade = position
 
         # positive trades ratio depending of total numbers of trades
         self.positives_trades_ratio = divide(100 * self.total_positives_trades, self.total_trades)
@@ -147,6 +195,19 @@ class Wallet:
         self.average_profit_per_trades = (
             round(mean(trades_profit), 2), round(mean(trades_percent_profit), 2))
 
+        # Misc
+        self.end = self.dataframe['timestamp'][len(self.dataframe['timestamp']) - 1]
+        self.start = self.dataframe['timestamp'][0]
+        self.total_inday_trading_time = divide(int(self.end - self.start), 86400000)
+        self.first_price = self.dataframe['close'][0]
+        self.last_price = self.dataframe['close'][len(self.dataframe['close']) - 1]
+        self.buy_and_hold_profit = divide(self.ini_coin_balance * self.last_price, self.first_price)
+        self.buy_and_hold_percent_profit = divide(100 * self.last_price, self.first_price)
+        self.strategy_vs_buy_and_hold = self.profit - self.buy_and_hold_profit
+        self.strategy_vs_buy_and_hold_percent = self.percent_profit - self.buy_and_hold_percent_profit
+        self.average_profit_per_day = divide(self.profit, self.total_inday_trading_time)
+        self.average_percent_profit_per_day = divide(self.percent_profit, self.total_inday_trading_time)
+
     # Summarize all trades & wallet evolutions, strategy stats
     def display_wallet(self):
         # Build all required data
@@ -156,24 +217,11 @@ class Wallet:
             print(Colors.YELLOW, "This strategy didn't traded")
             return
 
-        # Calculate / initialising some data
-        end = self.dataframe['timestamp'][len(self.dataframe['timestamp']) - 1]
-        start = self.dataframe['timestamp'][0]
-        total_inday_trading_time = divide(int(end - start), 86400000)
-        first_price = self.dataframe['close'][0]
-        last_price = self.dataframe['close'][len(self.dataframe['close']) - 1]
-        buy_and_hold_profit = divide(self.ini_coin_balance*last_price, first_price)
-        buy_and_hold_percent_profit = divide(100*last_price, first_price)
-        strategy_vs_buy_and_hold = self.profit - buy_and_hold_profit
-        strategy_vs_buy_and_hold_percent = self.percent_profit - buy_and_hold_percent_profit
-        average_profit_per_day = divide(self.profit, total_inday_trading_time)
-        average_percent_profit_per_day = divide(self.percent_profit, total_inday_trading_time)
-
         # --- Intro ---
 
         print(Colors.PURPLE + "----------------------------------------------------")
-        print("Data from", parse_timestamp(start), "to", parse_timestamp(end))
-        print("Total trading time:", str(round(total_inday_trading_time, 2)), "day(s)")
+        print("Data from", parse_timestamp(self.start), "to", parse_timestamp(self.end))
+        print("Total trading time:", str(round(self.total_inday_trading_time, 2)), "day(s)")
         print("----------------------------------------------------")
 
         # --- Wallet data ---
@@ -204,34 +252,34 @@ class Wallet:
               str(self.average_profit_per_trades[1]) + "%")
 
         # Average profit per day
-        print(" Average profit per day: ", round(average_profit_per_day, 2), "/",
-              str(round(average_percent_profit_per_day, 2)) + "%")
+        print(" Average profit per day: ", round(self.average_profit_per_day, 2), "/",
+              str(round(self.average_percent_profit_per_day, 2)) + "%")
 
         # Fees
         print(Colors.LIGHT_RED, "Fees: ", round(float(self.total_fees), 3), self.coin_name, "/",
               str(round(divide(100 * float(self.total_fees), self.coin_balance), 2)) + "%")
 
         # Buy & hold profit
-        if buy_and_hold_profit == 0:
-            print(Colors.CYAN, "Buy & hold profit: ", round(float(buy_and_hold_profit), 2), "/",
-                  str(round(float(buy_and_hold_percent_profit), )) + "%")
-        elif buy_and_hold_profit < 0:
-            print(Colors.RED, "Buy & hold profit: ", round(float(buy_and_hold_profit), 2), "/",
-                  str(round(float(buy_and_hold_percent_profit), )) + "%")
+        if self.buy_and_hold_profit == 0:
+            print(Colors.CYAN, "Buy & hold profit: ", round(float(self.buy_and_hold_profit), 2), "/",
+                  str(round(float(self.buy_and_hold_percent_profit), )) + "%")
+        elif self.buy_and_hold_profit < 0:
+            print(Colors.RED, "Buy & hold profit: ", round(float(self.buy_and_hold_profit), 2), "/",
+                  str(round(float(self.buy_and_hold_percent_profit), )) + "%")
         else:
-            print(Colors.GREEN, "Buy & hold profit: ", round(float(buy_and_hold_profit), 2), "/",
-                  str(round(float(buy_and_hold_percent_profit), )) + "%")
+            print(Colors.GREEN, "Buy & hold profit: ", round(float(self.buy_and_hold_profit), 2), "/",
+                  str(round(float(self.buy_and_hold_percent_profit), )) + "%")
 
         # Strategy vs Buy & Hold
-        if strategy_vs_buy_and_hold == 0:
-            print(Colors.CYAN, "Strategy vs buy & hold: ", round(float(strategy_vs_buy_and_hold), 2), "/",
-                  str(round(float(strategy_vs_buy_and_hold_percent), )) + "%")
-        elif strategy_vs_buy_and_hold < 0:
-            print(Colors.RED, "Strategy vs buy & hold: ", round(float(strategy_vs_buy_and_hold), 2), "/",
-                  str(round(float(strategy_vs_buy_and_hold_percent), )) + "%")
+        if self.strategy_vs_buy_and_hold == 0:
+            print(Colors.CYAN, "Strategy vs buy & hold: ", round(float(self.strategy_vs_buy_and_hold), 2), "/",
+                  str(round(float(self.strategy_vs_buy_and_hold_percent), )) + "%")
+        elif self.strategy_vs_buy_and_hold < 0:
+            print(Colors.RED, "Strategy vs buy & hold: ", round(float(self.strategy_vs_buy_and_hold), 2), "/",
+                  str(round(float(self.strategy_vs_buy_and_hold_percent), )) + "%")
         else:
-            print(Colors.GREEN, "Strategy vs buy & hold: ", round(float(strategy_vs_buy_and_hold), 2), "/",
-                  str(round(float(strategy_vs_buy_and_hold_percent), )) + "%")
+            print(Colors.GREEN, "Strategy vs buy & hold: ", round(float(self.strategy_vs_buy_and_hold), 2), "/",
+                  str(round(float(self.strategy_vs_buy_and_hold_percent), )) + "%")
 
         print("")
 
@@ -252,64 +300,60 @@ class Wallet:
         print(Colors.RED, "Average negative trades profit: " + str(self.average_negative_trades[0]), "/",
               str(self.average_negative_trades[1]) + "%")
         # Best trade data
-        print(Colors.GREEN, "Best trade: +" + str(round(self.best_trade["profit"][0], 2)) + " / +" +
-              str(round(self.best_trade["profit"][1])) + "%" + "  " + str(
-            parse_timestamp(self.best_trade["timestamp"][0])))
+        print(Colors.GREEN, "Best trade: +" + str(round(self.best_trade.trade_profit, 2)) + " / +" +
+              str(round(self.best_trade.percent_trade_profit)) + "%" + "  " +
+              str(parse_timestamp(self.best_trade.sell_timestamp)))
         # Worst trade data
-        print(Colors.RED, "Worst trade: " + str(round(self.worst_trade["profit"][0], 2)) + " / " +
-              str(round(self.worst_trade["profit"][1])) + "%" + "  " + str(
-            parse_timestamp(self.worst_trade["timestamp"][0])))
+        print(Colors.RED, "Worst trade: " + str(round(self.worst_trade.trade_profit, 2)) + " / " +
+              str(round(self.worst_trade.percent_trade_profit)) + "%" + "  " +
+              str(parse_timestamp(self.worst_trade.sell_timestamp)))
 
     # Make Balance and Token price graphs
-    def plot_wallet(self, dataframe=None, size=100):
+    def plot_wallet(self, size=100):
         # Total number of trades
-        self.total_trades = len(self.trades_list)
+        self.total_trades = self.position_book.last_position_index+1
         # Just create a simple graph price if the strategy didn't traded
         if self.total_trades == 0:
-            if dataframe is not None:
-                # main
-                plt.plot(dataframe["timestamp"], dataframe["close"], zorder=1)
+            # main
+            plt.plot(self.dataframe["timestamp"], self.dataframe["close"], zorder=1)
 
-                # linear regression
-                x, y = np.array(dataframe["timestamp"]), np.array(dataframe["close"])
-                m, b = np.polyfit(x, y, 1)
-                plt.plot(x, m * x + b)
+            # linear regression
+            x, y = np.array(self.dataframe["timestamp"]), np.array(self.dataframe["close"])
+            m, b = np.polyfit(x, y, 1)
+            plt.plot(x, m * x + b)
 
-                # labels
-                plt.title("Price " + self.token_name + "/" + self.coin_name)
-                plt.ylabel("price (" + self.coin_name + ")")
-                plt.xlabel("Time (timestamps)")
+            # labels
+            plt.title("Price " + self.token_name + "/" + self.coin_name)
+            plt.ylabel("price (" + self.coin_name + ")")
+            plt.xlabel("Time (timestamps)")
             plt.show()
             return
 
-        # Timestamps list
-        timestamps = []
-        # Prices list
-        prices = []
         # Sell orders timestamps
         sell_timestamps = []
+        # Balance at sell orders
+        sell_balance = []
+
         # Buy orders timestamps
         buy_timestamps = []
-        # Sell orders prices
+        # Price at sell orders
         sell_prices = []
-        # Buy orders prices
+        # Price at buy orders
         buy_prices = []
 
         # Append lists
-        for trade in self.trades_list:
-            prices.append(trade["sell"]["balance"])
-            timestamps.append(trade["sell"]["timestamp"])
-            sell_timestamps.append(trade["sell"]["timestamp"])
-            buy_timestamps.append(trade["buy"]["timestamp"])
-            sell_prices.append(trade["sell"]["price"])
-            buy_prices.append(trade["buy"]["price"])
-
+        for trade in self.position_book.book:
+            sell_timestamps.append(trade.sell_timestamp)
+            sell_balance.append(trade.balance_at_selling)
+            buy_timestamps.append(trade.buy_timestamp)
+            sell_prices.append(trade.sell_price)
+            buy_prices.append(trade.buy_price)
         # figure 1, balance
         plt.figure(1)
-        plt.plot(timestamps, prices)
+        plt.plot(sell_timestamps, sell_balance)
 
         # linear regression
-        x, y = np.array(timestamps), np.array(prices)
+        x, y = np.array(sell_timestamps), np.array(sell_balance)
         m, b = np.polyfit(x, y, 1)
         plt.plot(x, m * x + b)
 
@@ -319,17 +363,17 @@ class Wallet:
         plt.xlabel("Time (timestamps)")
 
         # figure 2, price
-        if dataframe is not None:
+        if self.dataframe is not None:
             plt.figure(2)
             # main
-            plt.plot(dataframe["timestamp"], dataframe["close"], zorder=1)
+            plt.plot(self.dataframe["timestamp"], self.dataframe["close"], zorder=1)
 
             # scatter
             plt.scatter(buy_timestamps, buy_prices, color="green", marker="^", s=size, zorder=3)
             plt.scatter(sell_timestamps, sell_prices, color="red", marker="v", s=size, zorder=2)
 
             # linear regression
-            x, y = np.array(dataframe["timestamp"]), np.array(dataframe["close"])
+            x, y = np.array(self.dataframe["timestamp"]), np.array(self.dataframe["close"])
             m, b = np.polyfit(x, y, 1)
             plt.plot(x, m * x + b)
 
