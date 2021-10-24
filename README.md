@@ -34,3 +34,5 @@
  
 **The documentation will be divided in two parts, at the moment just one engine to run basic backtest is made but I want to add a lot of engines. The first part of the doc will show how to run a backtest with at the moment juste the only engine created. The second part of the doc will describe more technically the classes and functions that can be used if you already want to run a specific strategy like grid trading**
 
+*Coming as soon as possible*
+
