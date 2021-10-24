@@ -8,7 +8,8 @@
 
 <br>
 
-```pip install open-backtest
+```
+pip install open-backtest
 ```
 
 ## What is it ? 📈
