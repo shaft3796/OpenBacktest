@@ -369,7 +369,7 @@ class DataHandler:
               str(round(self.percent_exposure_time)) + "%")
         # average exposure time per day
         print(Colors.BLUE,
-              "Average exposure time per day in days: " + str(round(self.average_exposure_time, 2)) + " / " +
+              "Average exposure time per trade in days: " + str(round(self.average_exposure_time, 2)) + " / " +
               str(round(self.average_percent_exposure_time)) + "%")
 
     # Make Balance and Token price graphs
@@ -395,8 +395,10 @@ class DataHandler:
 
         # Sell orders timestamps
         sell_timestamps = []
+        # Sell timestamps with the first timestamp
+        sell_timestamps_wallet = [self.start]
         # Balance at sell orders
-        sell_balance = []
+        sell_balance = [self.wallet.ini_coin_balance]
 
         # Buy orders timestamps
         buy_timestamps = []
@@ -408,16 +410,18 @@ class DataHandler:
         # Append lists
         for trade in self.wallet.position_book.book:
             sell_timestamps.append(trade.sell_timestamp)
+            sell_timestamps_wallet.append(trade.sell_timestamp)
             sell_balance.append(trade.balance_at_selling)
             buy_timestamps.append(trade.buy_timestamp)
             sell_prices.append(trade.sell_price)
             buy_prices.append(trade.buy_price)
+
         # figure 1, balance
         plt.figure(1)
-        plt.plot(sell_timestamps, sell_balance)
+        plt.plot(sell_timestamps_wallet, sell_balance)
 
         # linear regression
-        x, y = np.array(sell_timestamps), np.array(sell_balance)
+        x, y = np.array(sell_timestamps_wallet), np.array(sell_balance)
         m, b = np.polyfit(x, y, 1)
         plt.plot(x, m * x + b)
 
@@ -440,7 +444,6 @@ class DataHandler:
             x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["close"])
             m, b = np.polyfit(x, y, 1)
             plt.plot(x, m * x + b)
-
             # labels
             plt.title("Price " + self.wallet.token_name + "/" + self.wallet.coin_name)
             plt.ylabel("price (" + self.wallet.coin_name + ")")

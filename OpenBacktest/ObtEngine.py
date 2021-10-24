@@ -146,10 +146,14 @@ class Engine:
         if self.sl is not None:
             self.sl.update(index)
 
+    # get a custom dataframe
+    def get_sub_dataframe(self, name):
+        return self.container.get_pair(name).dataframe
+
 
 # define a pair
 class Pair:
-    def __init__(self, market_pair, start, timeframe, name="Default Name", path=""):
+    def __init__(self, market_pair, start, timeframe, name, path=""):
 
         self.pair = market_pair
         self.start = start
