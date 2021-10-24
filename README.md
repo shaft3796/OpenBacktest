@@ -8,6 +8,9 @@
 
 <br>
 
+```pip install open-backtest
+```
+
 ## What is it ? 📈
 
 **Passionate about the world of crypto and about development I decided to create a python library because I found very
