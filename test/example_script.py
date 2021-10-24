@@ -7,18 +7,19 @@ from binance.client import Client
 container = Container()
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="test_data/"))
+         path="data/"))
 container.add_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1DAY, name="ETHUSDT1d",
-         path="test_data/"))
+         path="data/"))
 
 # Initialising Engine
 engine = Engine(container)
-container.save_all(default_path="test_data/")
+container.save_all(default_path="data/")
 
 # enriching the dataframe with technical indicators
 engine.main_dataframe()["EMA200"] = trend.ema_indicator(engine.container.main.dataframe['close'], 3)
 engine.main_dataframe()["EMA600"] = trend.ema_indicator(engine.container.main.dataframe['close'], 100)
+engine.main_dataframe()["rsi"] = momentum.rsi(engine.container.main.dataframe['close'], 100)
 
 
 def buy_condition(dataframe, index):
