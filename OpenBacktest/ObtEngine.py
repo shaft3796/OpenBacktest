@@ -79,11 +79,11 @@ class Engine:
 
     # -------------------------------------------------------------------------------
     # def backtest parameters to run a more advanced strategy with just one function to handle conditions
-    def register_mono_function(self, strategy_function):
+    def __register_mono_function(self, strategy_function):
         self.strategy_function = strategy_function
 
     # run a more advanced backtest with just one function to handle conditions
-    def run_mono_function(self, coin_name, token_name, coin_balance, token_balance, taker, maker, finish=True):
+    def __run_mono_function(self, coin_name, token_name, coin_balance, token_balance, taker, maker, finish=True):
         # condition not None test
         if self.strategy_function is None:
             print(Colors.RED + "Error, you can't run a backtest because you don't have strategy function registered")
