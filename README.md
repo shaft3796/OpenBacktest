@@ -184,16 +184,8 @@ les données nécessaires à nos analyses mais aussi créer des graphiques**
  *Ces libraries seront automatiquement installées en meme temps qu'Open Backtest*
  
  ## Doc 📝
- 
-**The documentation will be divided in two parts, at the moment just one engine to run basic backtest is made but 
-I want to add a lot of engines. The first part of the doc will show how to run a backtest with at the moment just the 
-only engine created. The second part of the doc will describe more technically the classes and functions that can be 
-used if you already want to run a specific strategy like grid trading**
 
-**Correcteur d'orthographe et de grammaire
- français
-
-La documentation va être divisée en deux parties, pour le moment juste une seul "Engine" pour faire un backtest simple 
+**La documentation va être divisée en deux parties, pour le moment juste une seul "Engine" pour faire un backtest simple 
 est faite mais je veux en ajouter plein d'autres dans le futur. La première partie de la doc va montrer comment lancer 
 un backtest. La seconde partie va décrire plus techniquement les classes et fonctions utilisables si vous voulez déjà 
 lancer des stratégies plus complexes comme par exemple du grid trading**
