@@ -78,8 +78,13 @@ def buy_condition(dataframe, index):
     # So we can now access the ema for your timeframe of 1d like this :
     current_value_of_ema = second_dataframe["EMA3"][second_index]
 
+    # You can also place take profit and stop loss !
+    engine.set_take_profit(index, percent_target=50)
+    engine.set_stop_loss(index, percent_target=-50)
+    # Our bot will now sell all of it tokens when the price will increase or decrease by 50%
 
-# Same here as buy condition
+
+# Same here as sell condition
 def sell_condition(dataframe, index):
     if dataframe["EMA3"][index] <= dataframe["EMA100"][index]:
         return True

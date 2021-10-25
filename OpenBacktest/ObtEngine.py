@@ -3,12 +3,11 @@ import os
 import pandas as pd
 from binance.client import Client
 
-from OpenBacktest.ObtPositions import Stop
-from OpenBacktest.ObtUtility import Colors, timeframes
-from OpenBacktest.ObtWallet import Wallet
+from OpenBacktest.ObtUtility import Colors, timeframes, divide
+from OpenBacktest.ObtWallet import SymmetricWallet, AsymmetricWallet
 
 
-# define an backtest engine
+# Define a symmetric backtest engine
 class Engine:
     # Initialising the class
     def __init__(self, container, output=True):
@@ -23,7 +22,6 @@ class Engine:
         self.client = Client()
 
         # Used to run a backtest
-        self.strategy_function = None
         self.buy_condition = None
         self.sell_condition = None
         self.wallet = None
@@ -32,9 +30,14 @@ class Engine:
         self.tp = None
         self.sl = None
 
+        # balance ( use later to plot wallet graph )
+        self.balance = []
+
+    # get the main dataframe
     def main_dataframe(self):
         return self.container.main.dataframe
 
+    # get an alt dataframe with his name
     def alt_dataframe(self, name):
         return self.container.get_pair(name).dataframe
 
@@ -53,8 +56,8 @@ class Engine:
             return
 
         # Wallet initialisation
-        self.wallet = Wallet(coin_name, token_name, coin_balance, token_balance, taker, maker,
-                             self.main_dataframe())
+        self.wallet = SymmetricWallet(coin_name, token_name, coin_balance, token_balance, taker, maker,
+                                      self.main_dataframe())
         # Ini
         index = 0
 
@@ -62,93 +65,205 @@ class Engine:
         while index <= self.container.main.max_index:
 
             if self.buy_condition(self.main_dataframe(), index) and self.wallet.coin_balance > 0:
-                self.wallet.buy(index)
+                if self.wallet.position_book.last_position is None or self.wallet.position_book.last_position.closed:
+                    self.wallet.buy(index)
+                else:
+                    print(Colors.YELLOW, "Advert, buy order is not placeable because a long position is already opened")
             elif self.sell_condition(self.main_dataframe(), index) and self.wallet.token_balance > 0:
-                self.wallet.sell(index)
+                if self.wallet.position_book.last_position is not None and not \
+                        self.wallet.position_book.last_position.closed:
+                    self.wallet.sell(index)
+                else:
+                    print(Colors.YELLOW, "Advert, sell order is not placeable because there's no opened long position")
 
             # update tp & sl
-            self.update_tp_sl(index)
+            self.update_stop(index)
+
+            # update balance
+            self.balance.append(self.wallet.get_current_wallet_value(index))
 
             # end
             index += 1
 
+        self.main_dataframe()["balance"] = self.balance
+
         # Sell all remaining coins
         if self.wallet.token_balance > 0 and finish:
             self.wallet.sell(self.container.main.max_index)
-    # -------------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------------
-    # def backtest parameters to run a more advanced strategy with just one function to handle conditions
-    def __register_mono_function(self, strategy_function):
-        self.strategy_function = strategy_function
 
-    # run a more advanced backtest with just one function to handle conditions
-    def __run_mono_function(self, coin_name, token_name, coin_balance, token_balance, taker, maker, finish=True):
+    # get a custom dataframe
+    def get_sub_dataframe(self, name):
+        return self.container.get_pair(name).dataframe
+
+    # set TP & SL
+    def set_take_profit(self, index, target=None, percent_target=None):
+        if target is None and percent_target is None:
+            print(Colors.LIGHT_RED, "Error we can't register your take profit, no target")
+
+        if target is None:
+            if percent_target is None:
+                print(Colors.LIGHT_RED, "Error we can't register your take profit, no target")
+                exit()
+            else:
+                target = self.main_dataframe()["close"][index] + \
+                         self.main_dataframe()["close"][index] * divide(percent_target, 100)
+        self.tp = target
+
+    def set_stop_loss(self, index, target=None, percent_target=None):
+        if target is None and percent_target is None:
+            print(Colors.LIGHT_RED, "Error we can't register your stop loss, no target")
+
+        if target is None:
+            if percent_target is None:
+                print(Colors.LIGHT_RED, "Error we can't register your stop loss, no target")
+                exit()
+            else:
+                target = self.main_dataframe()["close"][index] + \
+                         self.main_dataframe()["close"][index] * divide(percent_target, 100)
+        self.sl = target
+
+    def cancel_take_profit(self):
+        self.tp = None
+
+    def cancel_stop_loss(self):
+        self.sl = None
+
+    def update_stop(self, index):
+        price = self.main_dataframe()["close"][index]
+        if self.tp is not None and self.tp <= price:
+            self.wallet.sell(index)
+            self.tp = None
+        if self.sl is not None and self.sl >= price:
+            self.wallet.sell(index)
+            self.sl = None
+
+
+# Define an asymmetric backtest engine
+class AsymmetricEngine:
+    # Initialising the class
+    def __init__(self, container, output=True):
+        if output:
+            print(Colors.PURPLE + "Initialising BackTest Engine")
+
+        # Container
+        self.container = container
+        self.container.load_all(output=output)
+
+        # python-binance client
+        self.client = Client()
+
+        # Used to run a backtest
+        self.strategy = None
+        self.wallet = None
+
+        # TP & SL
+        self.tp = None
+        self.sl = None
+
+        # balance ( used for balance graph plotting )
+        self.balance = []
+
+    # get the main dataframe
+    def main_dataframe(self):
+        return self.container.main.dataframe
+
+    # get an alt dataframe with his name
+    def alt_dataframe(self, name):
+        return self.container.get_pair(name).dataframe
+
+    # -------------------------------------------------------------------------------
+    # def backtest parameters to run an asymmetric strategy
+    def register_strategy(self, strategy):
+        self.strategy = strategy
+
+    # run an asymmetric strategy
+    def run_strategy(self, coin_name, token_name, coin_balance, token_balance, taker, maker, finish=True):
         # condition not None test
-        if self.strategy_function is None:
-            print(Colors.RED + "Error, you can't run a backtest because you don't have strategy function registered")
+        if self.strategy is None:
+            print(Colors.RED + "Error, you can't run a backtest because you don't have a strategy function registered")
             return
 
         # Wallet initialisation
-        self.wallet = Wallet(coin_name, token_name, coin_balance, token_balance, taker, maker,
-                             self.main_dataframe())
+        self.wallet = AsymmetricWallet(coin_name, token_name, coin_balance, token_balance, taker, maker,
+                                       self.main_dataframe())
         # Ini
         index = 0
 
         # Main loop
         while index <= self.container.main.max_index:
 
-            report = self.strategy_function(self.main_dataframe(), index)
-
+            # main
+            report = self.strategy(self.main_dataframe(), index)
             if report is not None:
-                if not isinstance(report, Report):
-                    print(Colors.RED, "Error, your strategy function have to return an instance of Report")
-
                 if report.order == "buy":
                     self.wallet.buy(index, report.amount, report.percent_amount)
                 elif report.order == "sell":
                     self.wallet.sell(index, report.amount, report.percent_amount)
-                else:
-                    print(Colors.RED, "Error, the order value of a report have to be 'sell' or 'buy'")
 
             # update tp & sl
-            self.update_tp_sl(index)
+            self.update_stop(index)
+
+            # update balance
+            self.balance.append(self.wallet.get_current_wallet_value(index))
 
             # end
             index += 1
 
+        self.main_dataframe()["balance"] = self.balance
+
         # Sell all remaining coins
         if self.wallet.token_balance > 0 and finish:
             self.wallet.sell(self.container.main.max_index)
+
     # -------------------------------------------------------------------------------
-
-    # place a take profit order
-    def set_take_profit(self, target_price, amount=None, percent_amount=None):
-        self.tp = Stop(self.wallet, "up", target_price, amount, percent_amount)
-
-    # cancel a take profit order
-    def cancel_take_profit(self):
-        self.tp = None
-
-    # place a stop loss order
-    def set_stop_loss(self, target_price, amount=None, percent_amount=None):
-        self.sl = Stop(self.wallet, "down", target_price, amount, percent_amount)
-
-    # cancel a take profit order
-    def cancel_stop_loss(self):
-        self.sl = None
-
-    # update tp & sl
-    def update_tp_sl(self, index):
-        if self.tp is not None:
-            self.tp.update(index)
-
-        if self.sl is not None:
-            self.sl.update(index)
 
     # get a custom dataframe
     def get_sub_dataframe(self, name):
         return self.container.get_pair(name).dataframe
+
+    # set TP & SL
+    def set_take_profit(self, index, target=None, percent_target=None):
+        if target is None and percent_target is None:
+            print(Colors.LIGHT_RED, "Error we can't register your take profit, no target")
+
+        if target is None:
+            if percent_target is None:
+                print(Colors.LIGHT_RED, "Error we can't register your take profit, no target")
+                exit()
+            else:
+                target = self.main_dataframe()["close"][index] + \
+                         self.main_dataframe()["close"][index] * divide(percent_target, 100)
+        self.tp = target
+
+    def set_stop_loss(self, index, target=None, percent_target=None):
+        if target is None and percent_target is None:
+            print(Colors.LIGHT_RED, "Error we can't register your stop loss, no target")
+
+        if target is None:
+            if percent_target is None:
+                print(Colors.LIGHT_RED, "Error we can't register your stop loss, no target")
+                exit()
+            else:
+                target = self.main_dataframe()["close"][index] + \
+                         self.main_dataframe()["close"][index] * divide(percent_target, 100)
+        self.sl = target
+
+    def cancel_take_profit(self):
+        self.tp = None
+
+    def cancel_stop_loss(self):
+        self.sl = None
+
+    def update_stop(self, index):
+        price = self.main_dataframe()["close"][index]
+        if self.tp is not None and self.tp <= price:
+            self.wallet.sell(index)
+            self.tp = None
+        if self.sl is not None and self.sl >= price:
+            self.wallet.sell(index)
+            self.sl = None
 
 
 # define a pair

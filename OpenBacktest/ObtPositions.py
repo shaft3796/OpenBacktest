@@ -1,10 +1,9 @@
 from OpenBacktest.ObtUtility import divide, Colors
 
 
-# -------------------------------------------------------------------------------
-# This is a class representing a long position that is one buy point and one sell point
-# -------------------------------------------------------------------------------
-
+# ---------------------------------------------------------------------------------------------------------------
+# This is a class representing a long position that is one buy point and one sell point used for symetric engine
+# ---------------------------------------------------------------------------------------------------------------
 class LongPosition:
     def __init__(self):
         # Buy order
@@ -47,9 +46,9 @@ class LongPosition:
         self.position_time = divide(float(self.sell_timestamp) - float(self.buy_timestamp), 86400000)
 
 
-# -------------------------------------------------------------------------------
-# This is a class representing a position book that contain a list of positions
-# -------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------------
+# This is a class representing a position book that contain a list of positions used for symetric engine
+# -------------------------------------------------------------------------------------------------------
 class PositionBook:
     # Ini
     def __init__(self):
@@ -77,6 +76,49 @@ class PositionBook:
         else:
             self.last_position = position
             self.last_position_index += 1
+
+    # Close the book
+    def close(self):
+        self.closed = True
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# This is a class representing an order that is one buy point or one sell point, it's used for asymetric engine
+# ---------------------------------------------------------------------------------------------------------------
+class Order:
+    def __init__(self, order_type, timestamp, price, coin_balance, token_balance, amount_of_coin, amount_of_token):
+
+        # Order
+        self.type = order_type
+        self.timestamp = timestamp
+        self.price = price
+        self.coin_balance_at_order = coin_balance
+        self.token_balance_at_order = token_balance
+        self.amount_of_coin = amount_of_coin
+        self.amount_of_token = amount_of_token
+
+
+# -------------------------------------------------------------------------------------------------------
+# This is a class representing an order book that contain a list of orders, it's used for asymetric engine
+# -------------------------------------------------------------------------------------------------------
+class OrderBook:
+    # Ini
+    def __init__(self):
+        self.book = []
+        self.first_position_index = 0
+        self.first_position = None
+        self.last_position_index = 0
+        self.last_position = None
+
+        self.closed = False
+
+    # Add a position to the book
+    def push_order(self, order):
+        if self.closed:
+            print(Colors.LIGHT_RED + "Error, you tried to add a position to a closed book !")
+            return
+
+        self.book.append(order)
 
     # Close the book
     def close(self):
@@ -113,6 +155,3 @@ class Stop:
             self.wallet.sell(index, amount=self.amount)
         elif self.stop_type == "down" and self.wallet.dataframe["close"][index] < self.target_price:
             self.wallet.sell(index, amount=self.amount)
-
-
-

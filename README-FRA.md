@@ -7,21 +7,35 @@
 
 <br>
 
+<img src="https://static.pepy.tech/personalized-badge/open-backtest?period=total&units=international_system&left_color=black&right_color=blue&left_text=Downloads" width=150></img>
+
 ```
 pip install open-backtest
 ```
+### Vous voulez me contacter ? 👋
+
+https://discord.gg/wfpGXvjj9t
+
+### Vous voulez supporter mon travail ? ? 💰
+
+- paypal: *sh4ft.me@gmail.com*
+- usdt (ERC20): *0x17B516E9cA55C330B6b2bd2830042cAf5C7ecD7a*
+- btc: *34vo6zxSFYS5QJM6dpr4JLHVEo5vZ5owZH*
+- eth: *0xF7f87bc828707354AAfae235dE584F27bDCc9569*
+
+*merci si vous le faites 💖*
 
 ## Qu'est-ce qu'Open Backtest ? 📈
  
- **Passionné du monde des cryptos en général et du développement j'ai décidé de créer une library ayant trouvé très
+ **Passionné par le monde des cryptos en général et du développement j'ai décidé de créer une library ayant trouvé très
   ennuyeux pour les débutants de juste faire un simple backtest. Open backtest a été crée pour donner aux apprentis
    mais aussi aux confirmés un outil puissant et simple de backtesting**
 
 ## Comment ça fonctionne ? 🔧
  
- **Open Backtest fonctionne actuellement avec une "Engine" principale qui utilise diférentes classes utilitaires,
+ **Open Backtest fonctionne actuellement avec une "Engine" principale qui utilise différentes classes utilitaires,
   les donnés sont récoltées sur binance et la library peut gérer plusieurs intervalles de temps à la fois !
-Le téléchargement des donnés sous format Csv est aussi pris en charge afin de limiter le temps de chargement pour les 
+Le téléchargement des donnéss sous format Csv est aussi pris en charge afin de limiter le temps de chargement pour les 
 backtests suivants. La classe Wallet va gérer les ordres d'achat et de vente et le Data Handler va résumer et calculer 
 les données nécessaires à nos analyses mais aussi créer des graphiques**
  
@@ -36,13 +50,12 @@ les données nécessaires à nos analyses mais aussi créer des graphiques**
  
  ## Doc 📝
 
-**La documentation va être divisée en deux parties, pour le moment juste une seul "Engine" pour faire un backtest simple 
-est faite mais je veux en ajouter plein d'autres dans le futur. La première partie de la doc va montrer comment lancer 
-un backtest. La seconde partie va décrire plus techniquement les classes et fonctions utilisables si vous voulez déjà 
-lancer des stratégies plus complexes comme par exemple du grid trading**
+**La documentation va être divisée en deux parties, pour le moment juste deux "Engine" sont faites mais je vais en 
+ajouter plein d'autres dans le futur. La première partie de la doc va montrer comment lancer 
+un backtest. La seconde partie va décrire plus techniquement les classes et fonctions utilisables**
 
 ### Comment lancer un backtest ?
-Voyons ici in exemple utilisant le maximum qu'offre la première engine
+Voyons ici in exemple utilisant la première engine
 
 ```python
 # ------------------------------------------------------------------
@@ -56,7 +69,7 @@ from ta import trend, momentum
 # Importons ici 3 classes que nous utiliserons plus tard
 from OpenBacktest.ObtEngine import Engine, Container, Pair
 
-# Maintenant importons la library python-binance pour télécharger nos donnés
+# Maintenant importons la library python-binance pour télécharger nos données
 from binance.client import Client
 
 # ------------------------------------------------------------------
@@ -123,6 +136,10 @@ def buy_condition(dataframe, index):
     # On peut maintenant accéder à notre dataframe d'1 jour comme ceci
     current_value_of_ema = second_dataframe["EMA3"][second_index]
 
+    # Vous pouvez aussi placer des take profit et des stop loss !
+    engine.set_take_profit(index, percent_target=50)
+    engine.set_stop_loss(index, percent_target=-50)
+    # Notre bot va maintenant vendre ses tokens quand le prix va monter ou baisser de 50%
 
 # Idem ici avec notre condition de vente
 def sell_condition(dataframe, index):
@@ -149,11 +166,107 @@ engine.wallet.data_handler.display_wallet()
 engine.wallet.data_handler.plot_wallet(25)
 
 # -----------------------------------------------------------------------------------------------------------------
-# Et c'est terminé ! En espérant que ça n'a pas été trop dificil ! Pour toutes questions me contactaient sur discord: 
+# Et c'est terminé ! En espérant que ça n'a pas été trop difficile ! Pour toutes questions me contactaient sur discord: 
 # Shaft#3796
 # -----------------------------------------------------------------------------------------------------------------
 ```
 
 <img src="https://cdn.discordapp.com/attachments/901790872033714216/901922918961930241/result.png" alt="drawing" width="600"/>
 
-*La suite arrive bientôt*
+<br>
+<br>
+
+Voyons maintenant un exemple avec l'engine asymétrique
+
+```python
+# -----------------------------------------------------------------------------------------------------------------
+# Premièrement importons le Nécessaire mais avant, message important !!
+#
+# Lisez et comprenez l'engine symétrique avant de vous lancer dans celle-ci ! Je ne reviendrais pas ici
+# sur certains points déjà évoqués avec l'engine précédente
+#
+# -----------------------------------------------------------------------------------------------------------------
+
+# La library Technical Analyse va nous permettre d'ajouter pleins
+# d'indicateurs techniques pour nos stratégies
+from ta import trend, momentum
+
+# Importons ici 3 classes que nous utiliserons plus tard
+from OpenBacktest.ObtEngine import Engine, Container, Pair
+
+# Maintenant importons la library python-binance pour télécharger nos données
+from binance.client import Client
+
+# ------------------------------------------------------------------
+# Initialisons nos classes
+# ------------------------------------------------------------------
+
+# Premièrement créons un container qui va stocker nos paires de marchés sur diférentes timeframes si nous le souhaitons
+container = Container()
+
+# Like for a symmetric engine let's register our main pair but this time I will not show you how to register
+# others pairs with others timeframe but it's possible as explained for the symmetric engine
+
+# Comme pour notre engine symétrique enregistrons notre paire principale, mais cette fois je ne vais pas vous
+# montrer comment enregistrer d'autres paires avec d'autres timeframes mais c'est possible comme expliqué avec l'engine
+# symétrique
+container.add_main_pair(
+    Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
+         path="data/"))
+
+# Initialisons notre Engine avec notre container
+engine = AsymmetricEngine(container)
+
+# Ajoutons des indicateurs à nos dataframes vous pouvez suivre le lien si-dessous pour plus d'informations
+# https://technical-analysis-library-in-python.readthedocs.io/en/latest/
+
+# On ajoute 2 moyennes mobiles exponentielles
+engine.main_dataframe()["EMA3"] = trend.ema_indicator(engine.main_dataframe()['close'], 3)
+engine.main_dataframe()["EMA100"] = trend.ema_indicator(engine.main_dataframe()['close'], 100)
+
+
+# Cette fois si notre engine va juste fonctionner avec une seule fonction qui va retourner un report
+def strategy(dataframe, index):
+    # Nous allons avec cette fonction retourner un report, vous pouvez ne rien retourner ou retourner None pour ne rien
+    # faire ou bien retourner un Report pour passer un ordre. Le premier paramètre de notre report est obligatoire et va
+    # être le type de notre ordre ! soit "sell" soit "buy". Le second paramètre n'est pas obligatoire et sera le montant
+    # de token ou de coins que vous souhaitez vendre. Le 3ème paramètre n'est lui non plus pas obligatoire et va être le
+    # pourcentage de votre wallet à passer dans l'ordre
+    if dataframe["EMA3"][index] >= dataframe["EMA100"][index]:
+        return Report("buy", percent_amount=50)
+    if dataframe["EMA3"][index] <= dataframe["EMA100"][index]:
+        return Report("sell", percent_amount=50)
+
+    # Vous pouvez aussi ici utiliser des take profit et des stop loss !
+    # Nottez qu'avec cette stratégie je n'utilise pas du tout le plein potentiel de l'engine asymétrique. Cette engine
+    # peut être utilisée pour des stratégies plus avancées comme du grid trading
+
+
+# ------------------------------------------------------------------
+# Lançons maintenant le backtest !
+# ------------------------------------------------------------------
+
+# Cette fonction va enregistrer notre stratégie
+engine.register_strategy(strategy)
+
+# Cette fonction va lancer le backtest, le premier paramètre est le nom du coin, le second le nom du token, le 3ème la
+# somme initiale de coin, la 4ème la somme initiale de token, la 5ème les fraie de taker et la 6ème les fraie de taker
+engine.run_strategy("USDT", "Ethereum", 20, 0, 0.065, 0.019)
+
+# On résume ici le résultat du backtest
+engine.wallet.data_handler.display_wallet()
+
+# Et on va afficher ici les différents graphiques, le paramètre de la fonction est la taille des points d'achat et de
+# vente sur le graphique
+engine.wallet.data_handler.plot_wallet(25)
+
+# -----------------------------------------------------------------------------------------------------------------
+# Et c'est terminé ! En espérant que ça n'a pas été trop difficile ! Pour toutes questions me contacter sur discord:
+# Shaft#3796
+# -----------------------------------------------------------------------------------------------------------------
+
+```
+
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/902310248268849222/unknown.png" alt="drawing" width="600"/>
+
+*Next part is coming soon*
