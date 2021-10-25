@@ -3,7 +3,7 @@
 <img src="https://cdn.discordapp.com/attachments/901790872033714216/901790945127841862/IMG_2895.JPG" alt="drawing" width="300"/>
 
 ### Open source & beginner friendly crypto trading backtest library
-- <a src="https://github.com/Shaft-3796/OpenBacktest/blob/master/README-FRA.md">**French**</a>
+- [French](https://github.com/Shaft-3796/OpenBacktest/blob/master/README-FRA.md)
 
 <br>
 
