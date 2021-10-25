@@ -8,6 +8,10 @@
 
 <br>
 
+```
+pip install open-backtest
+```
+
 ## What is it ? 📈
 
 **Passionate about the world of crypto and about development I decided to create a python library because I found very
@@ -77,18 +81,18 @@ container = Container()
 # with candles of 1 hour
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="data/"))
+         path=""))
 # We register here a second pair with a largest timeframe ! The data will be get for the pair Ethereum - Usdt from
 # the 01 january 2021 to now with candles of 1 day, note that the name is not the same than our first pair !
 container.add_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1DAY, name="ETHUSDT1d",
-         path="data/"))
+         path=""))
 
 # Let's now initialise our engine with our container
 engine = Engine(container)
 
 # This line is not required ! it's used to save our data as csv files to be able to just load it for the next backtest
-container.save_all(default_path="data/")
+container.save_all(default_path="")
 
 # We are here enriching our dataframes with technical indicators using TA lib more information here
 # https://technical-analysis-library-in-python.readthedocs.io/en/latest/
@@ -180,16 +184,8 @@ les données nécessaires à nos analyses mais aussi créer des graphiques**
  *Ces libraries seront automatiquement installées en meme temps qu'Open Backtest*
  
  ## Doc 📝
- 
-**The documentation will be divided in two parts, at the moment just one engine to run basic backtest is made but 
-I want to add a lot of engines. The first part of the doc will show how to run a backtest with at the moment just the 
-only engine created. The second part of the doc will describe more technically the classes and functions that can be 
-used if you already want to run a specific strategy like grid trading**
 
-**Correcteur d'orthographe et de grammaire
- français
-
-La documentation va être divisée en deux parties, pour le moment juste une seul "Engine" pour faire un backtest simple 
+**La documentation va être divisée en deux parties, pour le moment juste une seul "Engine" pour faire un backtest simple 
 est faite mais je veux en ajouter plein d'autres dans le futur. La première partie de la doc va montrer comment lancer 
 un backtest. La seconde partie va décrire plus techniquement les classes et fonctions utilisables si vous voulez déjà 
 lancer des stratégies plus complexes comme par exemple du grid trading**
@@ -233,19 +229,19 @@ container = Container()
 # avec des bougies d'1 heure
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="data/"))
+         path=""))
 # On enregistre ici une seconde paire avec un timeframe plus large ! Les données seront pour la paire ethereum usdt à 
 # partir du 1er janvier 2021 avec des bougies d'1 heure, notez que le nom ne doit pas être identique que la paire 
 # principale
 container.add_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1DAY, name="ETHUSDT1d",
-         path="data/"))
+         path=""))
 
 # Initialisons notre Engine avec notre container
 engine = Engine(container)
 
 # Cette ligne n'est pas obligatoire elle permet de sauvegarder la paire sous forme de fichier csv
-container.save_all(default_path="data/")
+container.save_all(default_path="")
 
 # Ajoutons des indicateurs à nos dataframes vous pouvez suivre le lien si-dessous pour plus d'informations
 # https://technical-analysis-library-in-python.readthedocs.io/en/latest/
