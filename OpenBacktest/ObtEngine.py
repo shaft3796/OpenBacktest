@@ -64,6 +64,9 @@ class Engine:
         # Main loop
         while index <= self.container.main.max_index:
 
+            # update tp & sl
+            self.update_stop(index)
+
             if self.buy_condition(self.main_dataframe(), index) and self.wallet.coin_balance > 0:
                 if self.wallet.position_book.last_position is None or self.wallet.position_book.last_position.closed:
                     self.wallet.buy(index)
@@ -75,9 +78,6 @@ class Engine:
                     self.wallet.sell(index)
                 else:
                     print(Colors.YELLOW, "Advert, sell order is not placeable because there's no opened long position")
-
-            # update tp & sl
-            self.update_stop(index)
 
             # update balance
             self.balance.append(self.wallet.get_current_wallet_value(index))

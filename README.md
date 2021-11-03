@@ -93,18 +93,18 @@ container = Container()
 # with candles of 1 hour
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="data/"))
+         path=""))
 # We register here a second pair with a largest timeframe ! The data will be get for the pair Ethereum - Usdt from
 # the 01 january 2021 to now with candles of 1 day, note that the name is not the same than our first pair !
 container.add_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1DAY, name="ETHUSDT1d",
-         path="data/"))
+         path=""))
 
 # Let's now initialise our engine with our container
 engine = Engine(container)
 
 # This line is not required ! it's used to save our data as csv files to be able to just load it for the next backtest
-container.save_all(default_path="data/")
+container.save_all(default_path="")
 
 # We are here enriching our dataframes with technical indicators using TA lib more information here
 # https://technical-analysis-library-in-python.readthedocs.io/en/latest/
@@ -209,7 +209,7 @@ container = Container()
 # others pairs with others timeframe but it's possible as explained for the symmetric engine
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="data/"))
+         path=""))
 
 # Let's now initialise our engine with our container but this time, an assymetric engine
 engine = AsymmetricEngine(container)

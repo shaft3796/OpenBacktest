@@ -192,7 +192,7 @@ Voyons maintenant un exemple avec l'engine asymétrique
 from ta import trend, momentum
 
 # Importons ici 3 classes que nous utiliserons plus tard
-from OpenBacktest.ObtEngine import Engine, Container, Pair
+from OpenBacktest.ObtEngine import AsymmetricEngine, Container, Pair
 
 # Maintenant importons la library python-binance pour télécharger nos données
 from binance.client import Client
@@ -212,7 +212,7 @@ container = Container()
 # symétrique
 container.add_main_pair(
     Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
-         path="data/"))
+         path=""))
 
 # Initialisons notre Engine avec notre container
 engine = AsymmetricEngine(container)
