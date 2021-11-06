@@ -1,7 +1,5 @@
 from statistics import mean
-
-import matplotlib.pyplot as plt
-import numpy as np
+from OpenBacktest.ObtGraph import GraphManager
 from OpenBacktest.ObtUtility import divide, Colors, remove_fees, parse_timestamp
 from OpenBacktest.ObtPositions import PositionBook, LongPosition, OrderBook, Order
 
@@ -77,7 +75,7 @@ class SymmetricWallet:
 
     def get_current_wallet_value(self, index):
         price = self.dataframe["close"][index]
-        return self.coin_balance + self.token_balance*price
+        return self.coin_balance + self.token_balance * price
 
 
 # ------------------------------------------------------------------------------------------------------
@@ -162,7 +160,7 @@ class AsymmetricWallet:
 
     def get_current_wallet_value(self, index):
         price = self.dataframe["close"][index]
-        return self.coin_balance + self.token_balance*price
+        return self.coin_balance + self.token_balance * price
 
 
 # -------------------------------------------------------------------------------
@@ -229,6 +227,14 @@ class SymmetricDataHandler:
         self.average_percent_exposure_time = None
         # drawback / drawdown
         self.drawdown = 0
+        # drawback / drawdown timestamp
+        self.drawdown_timestamp = 0
+        # drawback / drawdown balance
+        self.balance_at_drawdown = 0
+        # last ATH
+        self.last_ath = 0
+        # last ATH timestamp
+        self.last_ath_timestamp = 0
 
     # Make the required data to display wallet
     def make_data(self):
@@ -254,6 +260,7 @@ class SymmetricDataHandler:
         trades_percent_profit = []
         exposures = []
 
+        # Iteration in position book
         for position in self.wallet.position_book.book:
 
             # Count positive & negative trades and collect data to make average positive & negative trades profit
@@ -284,6 +291,23 @@ class SymmetricDataHandler:
             # Filling exposures list and incrementing total exposure time
             self.exposure_time += position.position_time
             exposures.append(position.position_time)
+
+        ath = self.wallet.ini_coin_balance
+        ath_timestamp = self.wallet.dataframe["timestamp"][0]
+        # Iteration in dataframe
+        for i in range(len(self.wallet.dataframe["timestamp"])):
+            balance = self.wallet.dataframe["balance"][i]
+            if balance >= ath:
+                ath = balance
+                ath_timestamp = self.wallet.dataframe["timestamp"][i]
+            else:
+                drawdown = -(divide(100 * (ath - balance), ath))
+                if drawdown < self.drawdown:
+                    self.drawdown = drawdown
+                    self.balance_at_drawdown = balance
+                    self.drawdown_timestamp = self.wallet.dataframe["timestamp"][i]
+                    self.last_ath = ath
+                    self.last_ath_timestamp = ath_timestamp
 
         # positive trades ratio depending of total numbers of trades
         self.positives_trades_ratio = divide(100 * self.total_positives_trades, self.total_trades)
@@ -388,6 +412,9 @@ class SymmetricDataHandler:
         print(Colors.LIGHT_RED, "Fees: ", round(float(self.wallet.total_fees), 3), self.wallet.coin_name, "/",
               str(round(divide(100 * float(self.wallet.total_fees), self.wallet.coin_balance), 2)) + "%")
 
+        # Drawdown
+        print(Colors.LIGHT_RED, "Worst drawDown/drawBack: ", str(round(float(self.drawdown), 2)) + "%")
+
         # Buy & hold profit
         if self.buy_and_hold_profit == 0:
             print(Colors.CYAN, "Buy & hold profit: ", round(float(self.buy_and_hold_profit), 2), "/",
@@ -445,24 +472,24 @@ class SymmetricDataHandler:
               str(round(self.average_percent_exposure_time)) + "%")
 
     # Make Balance and Token price graphs
-    def plot_wallet(self, size=100):
+    def plot_wallet(self, size=10, tradeline=True):
+        manager1 = GraphManager()
+        manager1.set_title(self.wallet.token_name + "/" + self.wallet.coin_name)
+        manager1.set_sub_title("Time (ms)", target="x", sub=1)
+        manager1.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
+
+        manager2 = GraphManager(2, 1, height=[0.5, 1], titles=["Price", "Wallet"])
+        manager2.set_title(self.wallet.token_name + "/" + self.wallet.coin_name)
+        manager2.set_sub_title("Time (ms)", target="x", sub=2)
+        manager2.set_sub_title("Time (ms)", target="x", sub=1)
+        manager2.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
+        manager2.set_sub_title("Balance (" + self.wallet.coin_name + ")", target="y", sub=2)
+
         # Total number of trades
         self.total_trades = self.wallet.position_book.last_position_index + 1
-        # Just create a simple graph price if the strategy didn't traded
+        # Cancel plotting if there are no trades
         if self.total_trades == 0:
-            # main
-            plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["close"], zorder=1)
-
-            # linear regression
-            x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["close"])
-            m, b = np.polyfit(x, y, 1)
-            plt.plot(x, m * x + b)
-
-            # labels
-            plt.title("Price " + self.wallet.token_name + "/" + self.wallet.coin_name)
-            plt.ylabel("price (" + self.wallet.coin_name + ")")
-            plt.xlabel("Time (timestamps)")
-            plt.show()
+            print(Colors.YELLOW, "No trades found, plotting canceled")
             return
 
         # Sell orders timestamps
@@ -474,47 +501,94 @@ class SymmetricDataHandler:
         # Price at buy orders
         buy_prices = []
 
-        # Append lists
+        # Build sell and buy orders timestamps and prices
         for trade in self.wallet.position_book.book:
             sell_timestamps.append(trade.sell_timestamp)
             buy_timestamps.append(trade.buy_timestamp)
             sell_prices.append(trade.sell_price)
             buy_prices.append(trade.buy_price)
 
-        # figure 1, balance
-        plt.figure(1)
-        plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["balance"])
-
-        # linear regression
-        x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["balance"])
-        m, b = np.polyfit(x, y, 1)
-        plt.plot(x, m * x + b)
-
-        # labels
-        plt.title("Balance")
-        plt.ylabel("balance (" + self.wallet.coin_name + ")")
-        plt.xlabel("Time (timestamps)")
-
-        # figure 2, price
+        # Graph 1 Sub 1 - Price
         if self.wallet.dataframe is not None:
-            plt.figure(2)
-            # main
-            plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["close"], zorder=1)
+            if not tradeline:
+                manager1 = GraphManager()
 
-            # scatter
-            plt.scatter(buy_timestamps, buy_prices, color="green", marker="^", s=size, zorder=3)
-            plt.scatter(sell_timestamps, sell_prices, color="red", marker="v", s=size, zorder=2)
+                manager1.plot_price(dataframe=self.wallet.dataframe)
+                manager1.draw_marker(buy_timestamps, buy_prices, marker_color="black", marker_symbol="triangle-up",
+                                     marker_size=size + 3)
+                manager1.draw_marker(sell_timestamps, sell_prices, marker_color="black", marker_symbol="triangle-down",
+                                     marker_size=size + 3)
+                manager1.draw_marker(buy_timestamps, buy_prices, marker_color="green", marker_symbol="triangle-up",
+                                     marker_size=size)
+                manager1.draw_marker(sell_timestamps, sell_prices, marker_color="red", marker_symbol="triangle-down",
+                                     marker_size=size)
+            else:
+                manager1.plot_price(dataframe=self.wallet.dataframe)
 
-            # linear regression
-            x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["close"])
-            m, b = np.polyfit(x, y, 1)
-            plt.plot(x, m * x + b)
-            # labels
-            plt.title("Price " + self.wallet.token_name + "/" + self.wallet.coin_name)
-            plt.ylabel("price (" + self.wallet.coin_name + ")")
-            plt.xlabel("Time (timestamps)")
+                manager1.draw_line([self.wallet.dataframe["timestamp"][0],
+                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                                   [0, 0], line_width=13,
+                                   line_color="black", hoverinfo="none")
+                manager1.draw_line([self.wallet.dataframe["timestamp"][0],
+                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                                   [0, 0], line_width=10,
+                                   line_color="white", hoverinfo="none")
+                for i in range(len(buy_timestamps)):
+                    manager1.draw_trade_line(buy_timestamps[i], buy_prices[i], sell_timestamps[i], sell_prices[i],
+                                             marker_size=13, line_width=4, marker_color="black", line_color="black")
+                    manager1.draw_trade_line(buy_timestamps[i], buy_prices[i], sell_timestamps[i], sell_prices[i])
 
-        plt.show()
+                    if buy_prices[i] >= sell_prices[i]:
+                        manager1.draw_line([buy_timestamps[i], sell_timestamps[i]], [0, 0], line_width=10,
+                                           line_color="red", hoverinfo="none")
+                    else:
+                        manager1.draw_line([buy_timestamps[i], sell_timestamps[i]], [0, 0], line_width=10,
+                                           line_color="green", hoverinfo="none")
+        # Graph 2 Sub 1 - Price
+        if self.wallet.dataframe is not None:
+            if not tradeline:
+                manager2 = GraphManager()
+
+                manager2.plot_price(dataframe=self.wallet.dataframe)
+                manager2.draw_marker(buy_timestamps, buy_prices, marker_color="black", marker_symbol="triangle-up",
+                                     marker_size=size + 3)
+                manager2.draw_marker(sell_timestamps, sell_prices, marker_color="black", marker_symbol="triangle-down",
+                                     marker_size=size + 3)
+                manager2.draw_marker(buy_timestamps, buy_prices, marker_color="green", marker_symbol="triangle-up",
+                                     marker_size=size)
+                manager2.draw_marker(sell_timestamps, sell_prices, marker_color="red", marker_symbol="triangle-down",
+                                     marker_size=size)
+            else:
+                manager2.plot_price(dataframe=self.wallet.dataframe)
+
+                manager2.draw_line([self.wallet.dataframe["timestamp"][0],
+                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                                   [0, 0], line_width=13,
+                                   line_color="black", hoverinfo="none")
+                manager2.draw_line([self.wallet.dataframe["timestamp"][0],
+                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                                   [0, 0], line_width=10,
+                                   line_color="white", hoverinfo="none")
+                for i in range(len(buy_timestamps)):
+                    manager2.draw_trade_line(buy_timestamps[i], buy_prices[i], sell_timestamps[i], sell_prices[i],
+                                             marker_size=13, line_width=4, marker_color="black", line_color="black")
+                    manager2.draw_trade_line(buy_timestamps[i], buy_prices[i], sell_timestamps[i], sell_prices[i])
+
+                    if buy_prices[i] >= sell_prices[i]:
+                        manager2.draw_line([buy_timestamps[i], sell_timestamps[i]], [0, 0], line_width=10,
+                                           line_color="red", hoverinfo="none")
+                    else:
+                        manager2.draw_line([buy_timestamps[i], sell_timestamps[i]], [0, 0], line_width=10,
+                                           line_color="green", hoverinfo="none")
+        # Graph 2 Sub 2 - Wallet
+        manager2.draw_line(list(self.wallet.dataframe["timestamp"]), list(self.wallet.dataframe["balance"]),
+                           line_color="darkblue", line_width=3, row=2)
+        manager2.draw_line([self.last_ath_timestamp, self.drawdown_timestamp], [self.last_ath, self.balance_at_drawdown],
+                           line_color="red", line_width=3, row=2, showlegend=True,
+                           name="Worst drawDown ( on Wallet Graph )")
+
+        manager1.show()
+        manager2.show()
 
 
 # -------------------------------------------------------------------------------
@@ -684,36 +758,36 @@ class AsymmetricDataHandler:
         print(Colors.RED, "Total sell orders:", self.total_sell_orders)
 
     # Make Balance and Token price graphs
-    def plot_wallet(self, size=100):
+    def plot_wallet(self, size=10):
+        manager1 = GraphManager()
+        manager1.set_title(self.wallet.token_name + "/" + self.wallet.coin_name)
+        manager1.set_sub_title("Time (ms)", target="x", sub=1)
+        manager1.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
+
+        manager2 = GraphManager(2, 1, height=[0.5, 1], titles=["Price", "Wallet"])
+        manager2.set_title(self.wallet.token_name + "/" + self.wallet.coin_name)
+        manager2.set_sub_title("Time (ms)", target="x", sub=2)
+        manager2.set_sub_title("Time (ms)", target="x", sub=1)
+        manager2.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
+        manager2.set_sub_title("Balance (" + self.wallet.coin_name + ")", target="y", sub=2)
+
         # Total number of trades
-        self.total_orders = len(self.wallet.order_book.book)
-        # Just create a simple graph price if the strategy didn't traded
-        if self.total_orders == 0:
-            # main
-            plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["close"], zorder=1)
-
-            # linear regression
-            x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["close"])
-            m, b = np.polyfit(x, y, 1)
-            plt.plot(x, m * x + b)
-
-            # labels
-            plt.title("Price " + self.wallet.token_name + "/" + self.wallet.coin_name)
-            plt.ylabel("price (" + self.wallet.coin_name + ")")
-            plt.xlabel("Time (timestamps)")
-            plt.show()
+        total_trades = self.wallet.order_book.last_position_index + 1
+        # Cancel plotting if there are no trades
+        if total_trades == 0:
+            print(Colors.YELLOW, "No trades found, plotting canceled")
             return
 
         # Sell orders timestamps
         sell_timestamps = []
-        # Price at sell orders
-        sell_prices = []
         # Buy orders timestamps
         buy_timestamps = []
+        # Price at sell orders
+        sell_prices = []
         # Price at buy orders
         buy_prices = []
 
-        # Append lists
+        # Build sell and buy orders timestamps and prices
         for order in self.wallet.order_book.book:
             if order.type == "buy":
                 buy_timestamps.append(order.timestamp)
@@ -722,37 +796,35 @@ class AsymmetricDataHandler:
                 sell_timestamps.append(order.timestamp)
                 sell_prices.append(order.price)
 
-        # figure 1, balance
-        plt.figure(1)
-        plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["balance"])
+        # Graph 1 Sub 1 - Price
+        manager1.plot_price(dataframe=self.wallet.dataframe)
+        manager1.draw_marker(buy_timestamps, buy_prices, marker_color="black", marker_symbol="triangle-up",
+                             marker_size=size + 3)
+        manager1.draw_marker(sell_timestamps, sell_prices, marker_color="black",
+                             marker_symbol="triangle-down",
+                             marker_size=size + 3)
+        manager1.draw_marker(buy_timestamps, buy_prices, marker_color="green", marker_symbol="triangle-up",
+                             marker_size=size)
+        manager1.draw_marker(sell_timestamps, sell_prices, marker_color="red",
+                             marker_symbol="triangle-down",
+                             marker_size=size)
 
-        # linear regression
-        x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["balance"])
-        m, b = np.polyfit(x, y, 1)
-        plt.plot(x, m * x + b)
+        # Graph 2 Sub 1 - Price
+        manager2.plot_price(dataframe=self.wallet.dataframe)
+        manager2.draw_marker(buy_timestamps, buy_prices, marker_color="black", marker_symbol="triangle-up",
+                             marker_size=size + 3)
+        manager2.draw_marker(sell_timestamps, sell_prices, marker_color="black",
+                             marker_symbol="triangle-down",
+                             marker_size=size + 3)
+        manager2.draw_marker(buy_timestamps, buy_prices, marker_color="green", marker_symbol="triangle-up",
+                             marker_size=size)
+        manager2.draw_marker(sell_timestamps, sell_prices, marker_color="red",
+                             marker_symbol="triangle-down",
+                             marker_size=size)
 
-        # labels
-        plt.title("Balance")
-        plt.ylabel("balance (" + self.wallet.coin_name + ")")
-        plt.xlabel("Time (timestamps)")
+        # Graph 2 Sub 2 - Wallet
+        manager2.draw_line(list(self.wallet.dataframe["timestamp"]), list(self.wallet.dataframe["balance"]),
+                           line_color="darkblue", line_width=3, row=2)
 
-        # figure 2, price
-        if self.wallet.dataframe is not None:
-            plt.figure(2)
-            # main
-            plt.plot(self.wallet.dataframe["timestamp"], self.wallet.dataframe["close"], zorder=1)
-
-            # scatter
-            plt.scatter(buy_timestamps, buy_prices, color="green", marker="^", s=size, zorder=3)
-            plt.scatter(sell_timestamps, sell_prices, color="red", marker="v", s=size, zorder=2)
-
-            # linear regression
-            x, y = np.array(self.wallet.dataframe["timestamp"]), np.array(self.wallet.dataframe["close"])
-            m, b = np.polyfit(x, y, 1)
-            plt.plot(x, m * x + b)
-            # labels
-            plt.title("Price " + self.wallet.token_name + "/" + self.wallet.coin_name)
-            plt.ylabel("price (" + self.wallet.coin_name + ")")
-            plt.xlabel("Time (timestamps)")
-
-        plt.show()
+        manager1.show()
+        manager2.show()

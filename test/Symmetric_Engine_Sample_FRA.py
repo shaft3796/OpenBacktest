@@ -57,7 +57,7 @@ engine.main_dataframe()["EMA100"] = trend.ema_indicator(engine.main_dataframe()[
 # Idem mais cette fois si à notre seconde dataframe
 engine.get_sub_dataframe("ETHUSDT1d")["EMA3"] = trend.ema_indicator(engine.get_sub_dataframe("ETHUSDT1d")["close"], 3)
 engine.get_sub_dataframe("ETHUSDT1d")["EMA100"] = trend.ema_indicator(engine.get_sub_dataframe("ETHUSDT1d")["close"],
-                                                                                                                    100)
+                                                                      100)
 
 
 # Créons maintenant deux conditions de vente et d'achat. L'Engine va les appeler avec la dataframe principal et
@@ -81,6 +81,7 @@ def buy_condition(dataframe, index):
     engine.set_stop_loss(index, percent_target=-50)
     # Notre bot va maintenant vendre ses tokens quand le prix va monter ou baisser de 50%
 
+
 # Idem ici avec notre condition de vente
 def sell_condition(dataframe, index):
     if dataframe["EMA3"][index] <= dataframe["EMA100"][index]:
@@ -103,7 +104,7 @@ engine.wallet.data_handler.display_wallet()
 
 # Et on va afficher ici les différents graphiques, le paramètre de la fonction est la taille des points d'achat et de
 # vente sur le graphique
-engine.wallet.data_handler.plot_wallet(25)
+engine.wallet.data_handler.plot_wallet()
 
 # -----------------------------------------------------------------------------------------------------------------
 # Et c'est terminé ! En espérant que ça n'a pas été trop difficile ! Pour toutes questions me contacter sur discord:

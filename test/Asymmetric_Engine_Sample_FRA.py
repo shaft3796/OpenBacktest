@@ -11,7 +11,7 @@
 from ta import trend, momentum
 
 # Importons ici 3 classes que nous utiliserons plus tard
-from OpenBacktest.ObtEngine import Engine, Container, Pair
+from OpenBacktest.ObtEngine import AsymmetricEngine, Container, Pair, Report
 
 # Maintenant importons la library python-binance pour télécharger nos données
 from binance.client import Client
@@ -77,7 +77,7 @@ engine.wallet.data_handler.display_wallet()
 
 # Et on va afficher ici les différents graphiques, le paramètre de la fonction est la taille des points d'achat et de
 # vente sur le graphique
-engine.wallet.data_handler.plot_wallet(25)
+engine.wallet.data_handler.plot_wallet()
 
 # -----------------------------------------------------------------------------------------------------------------
 # Et c'est terminé ! En espérant que ça n'a pas été trop difficile ! Pour toutes questions me contacter sur discord:

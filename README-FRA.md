@@ -43,7 +43,7 @@ les données nécessaires à nos analyses mais aussi créer des graphiques**
  
  - Pandas
  - Numpy
- - Matplotlib
+ - Plotly
  - Python-binance
  
  *Ces libraries seront automatiquement installées en meme temps qu'Open Backtest*
@@ -171,7 +171,9 @@ engine.wallet.data_handler.plot_wallet(25)
 # -----------------------------------------------------------------------------------------------------------------
 ```
 
-<img src="https://cdn.discordapp.com/attachments/901790872033714216/901922918961930241/result.png" alt="drawing" width="600"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561299503259729/unknown.png" alt="drawing" width="800"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561215600394241/unknown.png" alt="drawing" width="800"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561877520310342/unknown.png" alt="drawing" width="1000"/>
 
 <br>
 <br>
@@ -267,6 +269,8 @@ engine.wallet.data_handler.plot_wallet(25)
 
 ```
 
-<img src="https://cdn.discordapp.com/attachments/901790872033714216/902310248268849222/unknown.png" alt="drawing" width="600"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561364221395044/unknown.png" alt="drawing" width="800"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561406592237628/unknown.png" alt="drawing" width="800"/>
+<img src="https://cdn.discordapp.com/attachments/901790872033714216/906561578080563270/unknown.png" alt="drawing" width="1000"/>
 
 *Next part is coming soon*

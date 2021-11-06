@@ -76,3 +76,11 @@ def parse_timestamp(timestamp, strftime=None):
         date = date.strftime(strftime)
 
     return str(date)
+
+
+# Used to pull the value of a list or the value of a var if it's not a list
+def pull(var, index):
+    if isinstance(var, list):
+        return var[index]
+    else:
+        return var

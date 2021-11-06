@@ -5,7 +5,7 @@ requires = [
     "python-binance",
     "pandas",
     "numpy",
-    "matplotlib",
+    "plotly",
     "ta"
 ]
 build-backend = "setuptools.build_meta"

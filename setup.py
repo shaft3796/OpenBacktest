@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="open-backtest",
-    version="5.0.0",
+    version="6.0.0",
     author="Shaft3796",
     author_email="sh4ft.me@gmail.com",
     description="Open Backtest is a beginner friendly & powerful backtesting engine for crypto trading",
@@ -22,7 +22,7 @@ setuptools.setup(
         "python-binance",
         "pandas",
         "numpy",
-        "matplotlib",
+        "plotly",
         "ta"
     ],
     python_requires=">=3.6",

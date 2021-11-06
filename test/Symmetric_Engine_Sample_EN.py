@@ -106,7 +106,7 @@ engine.wallet.data_handler.display_wallet()
 
 # And we finally use it to plot graphs of price and balance evolution, the parameter is not required and is the size
 # of the sell and buy point on price graph
-engine.wallet.data_handler.plot_wallet(25)
+engine.wallet.data_handler.plot_wallet()
 
 # -----------------------------------------------------------------------------------------------------------------
 # And that's finish ! Hope you like and that it wasn't hard ! If you have any question dm me on discord: Shaft#3796
