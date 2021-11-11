@@ -1,166 +1,123 @@
 from statistics import mean
 from OpenBacktest.ObtGraph import GraphManager
-from OpenBacktest.ObtUtility import divide, Colors, remove_fees, parse_timestamp
-from OpenBacktest.ObtPositions import PositionBook, LongPosition, OrderBook, Order
+from OpenBacktest.ObtUtility import append_dataframe, initialise_dataframe, get_last_row, check_wallet_frame, divide, Colors, remove_fees, parse_timestamp
 
 
 # ------------------------------------------------------------------------------------------------
-# This class represent a symmetric wallet used to pass buy and sell orders of a symmetric strategy
+# This class represent a wallet used to pass buy and sell orders of a symmetric strategy
 # ------------------------------------------------------------------------------------------------
-class SymmetricWallet:
-    def __init__(self, coin_name, token_name, coin_balance, token_balance, taker, maker, dataframe):
-        # Initial coin balance ( will not be modified )
-        self.ini_coin_balance = coin_balance
-        # Initial token balance ( will not be modified )
-        self.ini_token_balance = token_balance
-        # Current coin balance ( should be modified )
-        self.coin_balance = coin_balance
-        # Current token balance
-        self.token_balance = token_balance
-
+class Wallet:
+    def __init__(self, coin_name, token_name, coin_balance, token_balance, taker, dataframe):
         # name of the coin
         self.coin_name = coin_name
         # symbol of the token
         self.token_name = token_name
-
-        # Taker fees
-        self.taker = divide(taker, 100.0)
         # Maker fees
-        self.maker = divide(maker, 100.0)
-
-        # Represent the current trade if there is an opened position
-        self.last_trade = None
-        # Represent all trades
-        self.position_book = PositionBook()
+        self.taker = divide(taker, 100.0)
         # Dataframe
         self.dataframe = dataframe
-
-        # total fees
-        self.total_fees = 0
-
         # data handler
-        self.data_handler = SymmetricDataHandler(self)
-
-    def buy(self, index):
-        amount = self.coin_balance
-        if amount == 0:
-            return
-
-        # Updating Position Book
-        # opening a new Position
-        position = LongPosition()
-        position.open(self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance, amount)
-        self.position_book.add_position(position)
-
-        # Buying
-        self.token_balance += remove_fees(divide(amount, self.dataframe["close"][index]), self.taker, self)
-        self.coin_balance = self.coin_balance - amount
-
-    def sell(self, index):
-        amount = self.token_balance
-        if amount == 0:
-            return
-
-        # Selling
-        old_coin_balance = self.coin_balance
-        self.coin_balance = remove_fees(self.token_balance * self.dataframe["close"][index], self.taker, self)
-        self.token_balance = self.token_balance - amount
-
-        # Updating Position Book
-        # loading current Position
-        position = self.position_book.last_position
-        # closing the position
-        position.close(self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance,
-                       self.coin_balance - old_coin_balance)
-
-    def get_current_wallet_value(self, index):
-        price = self.dataframe["close"][index]
-        return self.coin_balance + self.token_balance * price
-
-
-# ------------------------------------------------------------------------------------------------------
-# This class represent an asymmetric wallet used to pass buy and sell orders of a an asymetric strategy
-# ------------------------------------------------------------------------------------------------------
-class AsymmetricWallet:
-    def __init__(self, coin_name, token_name, coin_balance, token_balance, taker, maker, dataframe):
-        # Initial coin balance ( will not be modified )
-        self.ini_coin_balance = coin_balance
-        # Initial token balance ( will not be modified )
-        self.ini_token_balance = token_balance
-        # Current coin balance ( should be modified )
+        self.data_handler = None
+        # initial balances
         self.coin_balance = coin_balance
-        # Current token balance
         self.token_balance = token_balance
 
-        # name of the coin
-        self.coin_name = coin_name
-        # symbol of the token
-        self.token_name = token_name
+        self.wallet_frame = initialise_dataframe(["coin_balance", "token_balance", "total_fees", "order_type",
+                                                  "timestamp", "price", "size", "equivalence"])
 
-        # Taker fees
-        self.taker = divide(taker, 100.0)
-        # Maker fees
-        self.maker = divide(maker, 100.0)
-
-        # Represent all orders
-        self.order_book = OrderBook()
-        # Dataframe
-        self.dataframe = dataframe
-
-        # total fees
-        self.total_fees = 0
-
-        # data handler
-        self.data_handler = AsymmetricDataHandler(self)
+        # First row
+        self.wallet_frame = append_dataframe(self.wallet_frame, {"coin_balance": coin_balance,
+                                                                 "token_balance": token_balance,
+                                                                 "total_fees": 0.0,
+                                                                 "order_type": "blank",
+                                                                 "timestamp": "blank",
+                                                                 "price": "blank",
+                                                                 "size": "blank",
+                                                                 "equivalence": "blank"})
 
     def buy(self, index, amount=None, percent_amount=None):
+        last_row = get_last_row(self.wallet_frame)
+        coin_balance = last_row["coin_balance"]
+        total_fees = last_row["total_fees"]
+        token_balance = last_row["token_balance"]
+
         if amount is None:
             if percent_amount is None:
-                amount = self.coin_balance
+                amount = coin_balance
             else:
-                amount = self.coin_balance * divide(percent_amount, 100)
+                amount = coin_balance * divide(percent_amount, 100)
         else:
-            if amount > self.coin_balance:
-                amount = self.coin_balance
+            if amount > coin_balance:
+                amount = coin_balance
 
         if amount == 0:
             return
 
-        # Updating Order Book
-        self.order_book.push_order(
-            Order("buy", self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance,
-                  self.token_balance, amount, None))
+        fees = remove_fees(amount, self.taker)
 
-        # Buying
-        self.token_balance += remove_fees(divide(amount, self.dataframe["close"][index]), self.taker, self)
-        self.coin_balance -= amount
+        size = divide(100*amount, coin_balance)
+        buying_amount = amount - fees
+
+        new_balance = coin_balance - amount
+        new_token_balance = token_balance + divide(buying_amount, self.dataframe["close"][index])
+        # Updating wallet dataframe
+        self.wallet_frame = append_dataframe(self.wallet_frame, {"coin_balance": new_balance,
+                                                                 "token_balance": new_token_balance,
+                                                                 "total_fees": total_fees + fees,
+                                                                 "order_type": "BUY",
+                                                                 "timestamp": self.dataframe["timestamp"][index],
+                                                                 "price": self.dataframe["close"][index],
+                                                                 "size": size,
+                                                                 "equivalence": new_balance + new_token_balance *
+                                                                                self.dataframe["close"][index]})
 
     def sell(self, index, amount=None, percent_amount=None):
+        last_row = get_last_row(self.wallet_frame)
+        coin_balance = last_row["coin_balance"]
+        total_fees = last_row["total_fees"]
+        token_balance = last_row["token_balance"]
+
         if amount is None:
             if percent_amount is None:
-                amount = self.token_balance
+                amount = token_balance
             else:
-                amount = self.token_balance * divide(percent_amount, 100)
+                amount = token_balance * divide(percent_amount, 100)
         else:
-            if amount > self.token_balance:
-                amount = self.token_balance
+            if amount > token_balance:
+                amount = token_balance
 
         if amount == 0:
             return
 
-        # Selling
-        old_coin_balance = self.coin_balance
-        self.coin_balance += remove_fees(amount * self.dataframe["close"][index], self.taker, self)
-        self.token_balance -= amount
+        fees_in_coin = remove_fees(self.dataframe["close"][index] * amount, self.taker)
+        fees = remove_fees(amount, self.taker)
 
-        # Updating Order Book
-        self.order_book.push_order(
-            Order("sell", self.dataframe["timestamp"][index], self.dataframe["close"][index], self.coin_balance,
-                  self.token_balance, None, amount))
+        size = divide(100*amount, token_balance)
+        selling_amount = amount - fees
 
-    def get_current_wallet_value(self, index):
-        price = self.dataframe["close"][index]
-        return self.coin_balance + self.token_balance * price
+        new_balance = coin_balance - amount
+        new_token_balance = token_balance + divide(selling_amount, self.dataframe["close"][index])
+        # Updating wallet dataframe
+        self.wallet_frame = append_dataframe(self.wallet_frame,
+                                             {"coin_balance": coin_balance + self.dataframe["close"][
+                                                 index] * selling_amount,
+                                              "token_balance": token_balance - amount,
+                                              "total_fees": total_fees + fees_in_coin,
+                                              "order_type": "SELL",
+                                              "timestamp": self.dataframe["timestamp"][index],
+                                              "price": self.dataframe["close"][index],
+                                              "size": size,
+                                              "equivalence": new_balance + new_token_balance *
+                                                             self.dataframe["close"][index]})
+
+    def get_data_handler(self):
+        if self.data_handler is None:
+            if check_wallet_frame(self.wallet_frame):
+                self.data_handler = SymmetricDataHandler(self)
+            else:
+                self.data_handler = AsymmetricDataHandler(self)
+            return self.data_handler
+        return self.data_handler
 
 
 # -------------------------------------------------------------------------------
@@ -235,19 +192,28 @@ class SymmetricDataHandler:
         self.last_ath = 0
         # last ATH timestamp
         self.last_ath_timestamp = 0
+        # used to plot graph, list of all trades percent profit
+        self.trades_percent_profit = []
 
     # Make the required data to display wallet
     def make_data(self):
         # Total number of trades
-        self.total_trades = self.wallet.position_book.last_position_index + 1
+        self.total_trades = round(divide(len(self.wallet.wallet_frame["timestamp"]) - 1, 2))
         # return if there were no trades
         if self.total_trades == 0:
             return
 
         # --- Total Profit ---
-        self.profit = self.wallet.coin_balance - self.wallet.ini_coin_balance
+        self.profit = self.wallet.wallet_frame.iloc[-1]["coin_balance"] - self.wallet.coin_balance
+
         # Profit in percent depending of initial coin balance
-        self.percent_profit = divide(100 * self.profit, self.wallet.ini_coin_balance)
+        self.percent_profit = divide(100 * self.profit, self.wallet.coin_balance)
+
+        # --- Splitting ---
+        buy_orders = \
+            self.wallet.wallet_frame.loc[self.wallet.wallet_frame["order_type"] == "BUY"].reset_index(drop=True)
+        sell_orders = \
+            self.wallet.wallet_frame.loc[self.wallet.wallet_frame["order_type"] == "SELL"].reset_index(drop=True)
 
         # --- Trades ---
 
@@ -257,57 +223,64 @@ class SymmetricDataHandler:
         negative_trades_profit = []
         negative_trades_percent_profit = []
         trades_profit = []
-        trades_percent_profit = []
         exposures = []
 
-        # Iteration in position book
-        for position in self.wallet.position_book.book:
+        for index, buy_row in buy_orders.iterrows():
+            # Get the sell order
+            sell_row = sell_orders.iloc[index]
 
-            # Count positive & negative trades and collect data to make average positive & negative trades profit
-            if position.trade_profit > 0:
-                positive_trades_profit.append(position.trade_profit)
-                positive_trades_percent_profit.append(position.percent_trade_profit)
+            # Calculate the profit
+            trade_profit = sell_row["equivalence"] - buy_row["equivalence"]
+            trades_profit.append(trade_profit)
+
+            # Calculate the profit in percent
+            trade_percent_profit = float(divide(100 * trade_profit, buy_row["equivalence"]))
+            self.trades_percent_profit.append(trade_percent_profit)
+
+            # Calculate the exposure time
+            exposure = sell_row["timestamp"] - buy_row["timestamp"]
+            self.exposure_time += divide(exposure, 84000000)
+            exposures.append(exposure)
+
+            # Check if the trade was positive or negative
+            if trade_profit > 0:
                 self.total_positives_trades += 1
-            elif position.trade_profit < 0:
-                negative_trades_profit.append(position.trade_profit)
-                negative_trades_percent_profit.append(position.percent_trade_profit)
+                positive_trades_profit.append(trade_profit)
+                positive_trades_percent_profit.append(trade_percent_profit)
+            else:
                 self.total_negatives_trades += 1
-
-            # Collect data to make average positive & negative trades profit
-            trades_profit.append(position.trade_profit)
-            trades_percent_profit.append(position.percent_trade_profit)
+                negative_trades_profit.append(trade_profit)
+                negative_trades_percent_profit.append(trade_percent_profit)
 
             # Initializing worst_trade & best_trade values with the first trade
             if self.worst_trade is None or self.best_trade is None:
-                self.worst_trade = position
-                self.best_trade = position
+                self.worst_trade = trade_profit, trade_percent_profit, buy_row["timestamp"], sell_row["timestamp"]
+                self.best_trade = trade_profit, trade_percent_profit, buy_row["timestamp"], sell_row["timestamp"]
             # Updating best_trade
-            if position.percent_trade_profit > self.best_trade.percent_trade_profit:
-                self.best_trade = position
+            elif trade_percent_profit > self.best_trade[1]:
+                self.best_trade = trade_profit, trade_percent_profit, buy_row["timestamp"], sell_row["timestamp"]
             # Updating worst_trade
-            if position.percent_trade_profit < self.worst_trade.percent_trade_profit:
-                self.worst_trade = position
+            elif trade_percent_profit < self.worst_trade[1]:
+                self.worst_trade = trade_profit, trade_percent_profit, buy_row["timestamp"], sell_row["timestamp"]
 
-            # Filling exposures list and incrementing total exposure time
-            self.exposure_time += position.position_time
-            exposures.append(position.position_time)
+        ath = self.wallet.wallet_frame["equivalence"][1]
+        ath_timestamp = self.wallet.dataframe["timestamp"][1]
 
-        ath = self.wallet.ini_coin_balance
-        ath_timestamp = self.wallet.dataframe["timestamp"][0]
         # Iteration in dataframe
-        for i in range(len(self.wallet.dataframe["timestamp"])):
-            balance = self.wallet.dataframe["balance"][i]
-            if balance >= ath:
-                ath = balance
-                ath_timestamp = self.wallet.dataframe["timestamp"][i]
-            else:
-                drawdown = -(divide(100 * (ath - balance), ath))
-                if drawdown < self.drawdown:
-                    self.drawdown = drawdown
-                    self.balance_at_drawdown = balance
-                    self.drawdown_timestamp = self.wallet.dataframe["timestamp"][i]
-                    self.last_ath = ath
-                    self.last_ath_timestamp = ath_timestamp
+        for index, row in self.wallet.wallet_frame.iterrows():
+            if row["timestamp"] != "blank":
+                balance = row["equivalence"]
+                if balance >= ath:
+                    ath = balance
+                    ath_timestamp = row["timestamp"]
+                else:
+                    drawdown = -(divide(100 * (ath - balance), ath))
+                    if drawdown < self.drawdown:
+                        self.drawdown = drawdown
+                        self.balance_at_drawdown = balance
+                        self.drawdown_timestamp = row["timestamp"]
+                        self.last_ath = ath
+                        self.last_ath_timestamp = ath_timestamp
 
         # positive trades ratio depending of total numbers of trades
         self.positives_trades_ratio = divide(100 * self.total_positives_trades, self.total_trades)
@@ -328,22 +301,23 @@ class SymmetricDataHandler:
         # Average profit per trades
         if len(trades_profit) == 0:
             trades_profit.append(0)
-            trades_percent_profit.append(0)
+            self.trades_percent_profit.append(0)
         self.average_profit_per_trades = (
-            round(mean(trades_profit), 2), round(mean(trades_percent_profit), 2))
+            round(mean(trades_profit), 2), round(mean(self.trades_percent_profit), 2))
 
         # Last timestamp of the period
-        self.end = self.wallet.dataframe['timestamp'][len(self.wallet.dataframe['timestamp']) - 1]
+        self.end = self.wallet.wallet_frame.iloc[-1]["timestamp"]
         # First timestamp of the period
-        self.start = self.wallet.dataframe['timestamp'][0]
+        self.start = self.wallet.dataframe.iloc[0]["timestamp"]
         # Total days from first timestamp to the last one
         self.total_inday_trading_time = divide(int(self.end - self.start), 86400000)
         # First close price of the dataframe
-        self.first_price = self.wallet.dataframe['close'][0]
+        self.first_price = self.wallet.dataframe.iloc[0]["close"]
         # Last close price of the dataframe
-        self.last_price = self.wallet.dataframe['close'][len(self.wallet.dataframe['close']) - 1]
+        self.last_price = self.wallet.dataframe.iloc[-1]["close"]
         # Profit with buy & hold
-        self.buy_and_hold_profit = divide(self.wallet.ini_coin_balance * self.last_price, self.first_price)
+        self.buy_and_hold_profit = divide(self.wallet.wallet_frame.iloc[0]["coin_balance"] * self.last_price,
+                                          self.first_price)
         # Profit with buy & hold in %
         self.buy_and_hold_percent_profit = divide(100 * self.last_price, self.first_price)
         # Strategy performance vs buy & hold
@@ -355,7 +329,7 @@ class SymmetricDataHandler:
         # Average profit generated per day in %
         self.average_percent_profit_per_day = divide(self.percent_profit, self.total_inday_trading_time)
         # Average exposure time that mean average time of a trade
-        self.average_exposure_time = mean(exposures)
+        self.average_exposure_time = divide(mean(exposures), 86400000)
         # Average exposure time that mean average time of a trade in %
         self.average_percent_exposure_time = divide(100 * self.average_exposure_time, self.total_inday_trading_time)
         # Total exposure time in %
@@ -373,7 +347,7 @@ class SymmetricDataHandler:
         # --- Intro ---
 
         print(Colors.PURPLE + "----------------------------------------------------")
-        print("Data from", parse_timestamp(self.start), "to", parse_timestamp(self.end))
+        print("Data from", parse_timestamp(int(self.start)), "to", parse_timestamp(int(self.end)))
         print("Total trading time:", str(round(self.total_inday_trading_time, 2)), "day(s)")
         print("----------------------------------------------------")
 
@@ -381,24 +355,28 @@ class SymmetricDataHandler:
         # title
         print(Colors.YELLOW + "[-Wallet-]")
         # Initial coin balance
-        print(Colors.LIGHT_BLUE, "Initial", self.wallet.coin_name, round(float(self.wallet.ini_coin_balance), 3))
+        print(Colors.LIGHT_BLUE, "Initial", self.wallet.coin_name,
+              round(float(self.wallet.wallet_frame.iloc[0]["coin_balance"]), 3))
         # Final coin balance
-        print(Colors.LIGHT_BLUE, "Final", self.wallet.coin_name, round(float(self.wallet.coin_balance), 3))
+        print(Colors.LIGHT_BLUE, "Final", self.wallet.coin_name,
+              round(float(self.wallet.wallet_frame.iloc[-1]["coin_balance"]), 3))
         # Initial token balance
-        print(Colors.LIGHT_BLUE, "Initial", self.wallet.token_name, round(float(self.wallet.ini_token_balance), 3))
+        print(Colors.LIGHT_BLUE, "Initial", self.wallet.token_name,
+              round(float(self.wallet.wallet_frame.iloc[0]["token_balance"]), 6))
         # Final token balance
-        print(Colors.LIGHT_BLUE, "Final", self.wallet.token_name, round(float(self.wallet.token_balance), 6))
+        print(Colors.LIGHT_BLUE, "Final", self.wallet.token_name,
+              round(float(self.wallet.wallet_frame.iloc[-1]["token_balance"]), 6))
 
         # Profit
         if self.profit == 0:
             print(Colors.CYAN, "Strategy profit: ", round(float(self.profit), 2), "/",
-                  str(round(float(self.percent_profit), )) + "%")
+                  str(round(float(self.percent_profit), 2)) + "%")
         elif self.profit < 0:
             print(Colors.RED, "Strategy profit: ", round(float(self.profit), 2), "/",
-                  str(round(float(self.percent_profit), )) + "%")
+                  str(round(float(self.percent_profit), 2)) + "%")
         else:
             print(Colors.GREEN, "Strategy profit: ", round(float(self.profit), 2), "/",
-                  str(round(float(self.percent_profit), )) + "%")
+                  str(round(float(self.percent_profit), 2)) + "%")
 
         # Average profit per trades
         print(" Average profit per trades: ", self.average_profit_per_trades[0], "/",
@@ -409,8 +387,10 @@ class SymmetricDataHandler:
               str(round(self.average_percent_profit_per_day, 2)) + "%")
 
         # Fees
-        print(Colors.LIGHT_RED, "Fees: ", round(float(self.wallet.total_fees), 3), self.wallet.coin_name, "/",
-              str(round(divide(100 * float(self.wallet.total_fees), self.wallet.coin_balance), 2)) + "%")
+        print(Colors.LIGHT_RED, "Fees: ", round(float(self.wallet.wallet_frame.iloc[-1]["total_fees"]), 3),
+              self.wallet.coin_name, "/", str(round(divide(100 * float(self.wallet.wallet_frame.iloc[-1]["total_fees"]),
+                                                           self.wallet.wallet_frame.iloc[-1]["coin_balance"]),
+                                                    2)) + "%")
 
         # Drawdown
         print(Colors.LIGHT_RED, "Worst drawDown/drawBack: ", str(round(float(self.drawdown), 2)) + "%")
@@ -445,10 +425,10 @@ class SymmetricDataHandler:
         print(Colors.BLUE, "Total trades:", self.total_trades)
         # Total number of positive trades
         print(Colors.GREEN, "Total positive trades:", self.total_positives_trades, "/",
-              str(round(self.positives_trades_ratio)) + "%")
+              str(round(self.positives_trades_ratio, 1)) + "%")
         # Total number of negative trades
         print(Colors.RED, "Total negative trades:", self.total_negatives_trades, "/",
-              str(round(self.negatives_trades_ratio)) + "%")
+              str(round(self.negatives_trades_ratio, 1)) + "%")
         # Average positive trades
         print(Colors.GREEN, "Average positive trades profit: " + "+" + str(self.average_positive_trades[0]), "/",
               "+" + str(self.average_positive_trades[1]) + "%")
@@ -456,20 +436,20 @@ class SymmetricDataHandler:
         print(Colors.RED, "Average negative trades profit: " + str(self.average_negative_trades[0]), "/",
               str(self.average_negative_trades[1]) + "%")
         # Best trade data
-        print(Colors.GREEN, "Best trade: +" + str(round(self.best_trade.trade_profit, 2)) + " / +" +
-              str(round(self.best_trade.percent_trade_profit)) + "%" + "  " +
-              str(parse_timestamp(self.best_trade.sell_timestamp)))
+        print(Colors.GREEN, "Best trade: +" + str(round(self.best_trade[0], 2)) + " / +" +
+              str(round(self.best_trade[1], 2)) + "%" + "  from: " +
+              str(parse_timestamp(self.best_trade[2])) + " to " + str(parse_timestamp(self.best_trade[3])))
         # Worst trade data
-        print(Colors.RED, "Worst trade: " + str(round(self.worst_trade.trade_profit, 2)) + " / " +
-              str(round(self.worst_trade.percent_trade_profit)) + "%" + "  " +
-              str(parse_timestamp(self.worst_trade.sell_timestamp)))
+        print(Colors.RED, "Worst trade: " + str(round(self.worst_trade[0], 2)) + " / " +
+              str(round(self.worst_trade[1], 2)) + "%" + "  from: " +
+              str(parse_timestamp(self.worst_trade[2])) + " to " + str(parse_timestamp(self.worst_trade[3])))
         # total exposure time
         print(Colors.BLUE, "Total exposure time in days: " + str(round(self.exposure_time, 2)) + " / " +
-              str(round(self.percent_exposure_time)) + "%")
+              str(round(self.percent_exposure_time, 2)) + "%")
         # average exposure time per day
         print(Colors.BLUE,
               "Average exposure time per trade in days: " + str(round(self.average_exposure_time, 2)) + " / " +
-              str(round(self.average_percent_exposure_time)) + "%")
+              str(round(self.average_percent_exposure_time, 2)) + "%")
 
     # Make Balance and Token price graphs
     def plot_wallet(self, size=10, tradeline=True):
@@ -478,15 +458,17 @@ class SymmetricDataHandler:
         manager1.set_sub_title("Time (ms)", target="x", sub=1)
         manager1.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
 
-        manager2 = GraphManager(2, 1, height=[0.5, 1], titles=["Price", "Wallet"])
+        manager2 = GraphManager(3, 1, titles=["Price", "Wallet", "Trades profit"])
         manager2.set_title(self.wallet.token_name + "/" + self.wallet.coin_name)
         manager2.set_sub_title("Time (ms)", target="x", sub=2)
         manager2.set_sub_title("Time (ms)", target="x", sub=1)
+        manager2.set_sub_title("Time (ms)", target="x", sub=3)
         manager2.set_sub_title("Price (" + self.wallet.coin_name + ")", target="y", sub=1)
         manager2.set_sub_title("Balance (" + self.wallet.coin_name + ")", target="y", sub=2)
+        manager2.set_sub_title("Trade profit (%)", target="y", sub=3)
 
         # Total number of trades
-        self.total_trades = self.wallet.position_book.last_position_index + 1
+        self.total_trades = round(divide(len(self.wallet.wallet_frame["timestamp"]) - 1, 2))
         # Cancel plotting if there are no trades
         if self.total_trades == 0:
             print(Colors.YELLOW, "No trades found, plotting canceled")
@@ -501,12 +483,20 @@ class SymmetricDataHandler:
         # Price at buy orders
         buy_prices = []
 
+        # --- Splitting ---
+        buy_orders = \
+            self.wallet.wallet_frame.loc[self.wallet.wallet_frame["order_type"] == "BUY"].reset_index(drop=True)
+        sell_orders = \
+            self.wallet.wallet_frame.loc[self.wallet.wallet_frame["order_type"] == "SELL"].reset_index(drop=True)
+
         # Build sell and buy orders timestamps and prices
-        for trade in self.wallet.position_book.book:
-            sell_timestamps.append(trade.sell_timestamp)
-            buy_timestamps.append(trade.buy_timestamp)
-            sell_prices.append(trade.sell_price)
-            buy_prices.append(trade.buy_price)
+        for index, row in buy_orders.iterrows():
+            buy_timestamps.append(row["timestamp"])
+            buy_prices.append(row["price"])
+
+        for index, row in sell_orders.iterrows():
+            sell_timestamps.append(row["timestamp"])
+            sell_prices.append(row["price"])
 
         # Graph 1 Sub 1 - Price
         if self.wallet.dataframe is not None:
@@ -525,12 +515,12 @@ class SymmetricDataHandler:
             else:
                 manager1.plot_price(dataframe=self.wallet.dataframe)
 
-                manager1.draw_line([self.wallet.dataframe["timestamp"][0],
-                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                manager1.draw_line([self.wallet.dataframe.iloc[0]["timestamp"],
+                                    self.wallet.dataframe.iloc[-1]["timestamp"]],
                                    [0, 0], line_width=13,
                                    line_color="black", hoverinfo="none")
-                manager1.draw_line([self.wallet.dataframe["timestamp"][0],
-                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                manager1.draw_line([self.wallet.dataframe.iloc[0]["timestamp"],
+                                    self.wallet.dataframe.iloc[-1]["timestamp"]],
                                    [0, 0], line_width=10,
                                    line_color="white", hoverinfo="none")
                 for i in range(len(buy_timestamps)):
@@ -561,12 +551,12 @@ class SymmetricDataHandler:
             else:
                 manager2.plot_price(dataframe=self.wallet.dataframe)
 
-                manager2.draw_line([self.wallet.dataframe["timestamp"][0],
-                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                manager2.draw_line([self.wallet.dataframe.iloc[0]["timestamp"],
+                                    self.wallet.dataframe.iloc[-1]["timestamp"]],
                                    [0, 0], line_width=13,
                                    line_color="black", hoverinfo="none")
-                manager2.draw_line([self.wallet.dataframe["timestamp"][0],
-                                    self.wallet.dataframe["timestamp"][len(self.wallet.dataframe["timestamp"]) - 1]],
+                manager2.draw_line([self.wallet.dataframe.iloc[0]["timestamp"],
+                                    self.wallet.dataframe.iloc[-1]["timestamp"]],
                                    [0, 0], line_width=10,
                                    line_color="white", hoverinfo="none")
                 for i in range(len(buy_timestamps)):
@@ -581,18 +571,25 @@ class SymmetricDataHandler:
                         manager2.draw_line([buy_timestamps[i], sell_timestamps[i]], [0, 0], line_width=10,
                                            line_color="green", hoverinfo="none")
         # Graph 2 Sub 2 - Wallet
-        manager2.draw_line(list(self.wallet.dataframe["timestamp"]), list(self.wallet.dataframe["balance"]),
+        df = self.wallet.wallet_frame.loc(["timestamp"] != "blank")
+        manager2.draw_line(list(df["timestamp"]), list(df["equivalence"]),
                            line_color="darkblue", line_width=3, row=2)
-        manager2.draw_line([self.last_ath_timestamp, self.drawdown_timestamp], [self.last_ath, self.balance_at_drawdown],
-                           line_color="red", line_width=3, row=2, showlegend=True,
-                           name="Worst drawDown ( on Wallet Graph )")
+        manager2.draw_line([self.last_ath_timestamp, self.drawdown_timestamp],
+                           [self.last_ath, self.balance_at_drawdown],
+                           line_color="red", line_width=3, row=2)
+
+        # Graph 2 Sub 3 - Trades profit
+        manager2.draw_line(list(sell_timestamps), list(self.trades_percent_profit),
+                           line_color="darkblue", line_width=3, row=3)
+        manager2.draw_line([sell_timestamps[0], sell_timestamps[len(sell_timestamps) - 1]],
+                           [0, 0], line_color="gray", line_width=3, row=3)
 
         manager1.show()
         manager2.show()
 
 
 # -------------------------------------------------------------------------------
-# This class is used to summarize backtest result of a, asymmetric strategy
+# This class is used to summarize backtest result of a symmetric strategy
 # -------------------------------------------------------------------------------
 class AsymmetricDataHandler:
     def __init__(self, wallet):
@@ -603,11 +600,11 @@ class AsymmetricDataHandler:
         self.profit = 0
         # coin profit in %
         self.percent_profit = 0
-        # total number orders
+        # number of total trades
         self.total_orders = 0
-        # number of buy orders
+        # number of total positive trades
         self.total_buy_orders = 0
-        # number of sell orders
+        # number of total negative trades
         self.total_sell_orders = 0
         # Last close time
         self.end = None
@@ -631,41 +628,75 @@ class AsymmetricDataHandler:
         self.average_profit_per_day = None
         # aver profit per day in %
         self.average_percent_profit_per_day = None
+        # drawback / drawdown
+        self.drawdown = 0
+        # drawback / drawdown timestamp
+        self.drawdown_timestamp = 0
+        # drawback / drawdown balance
+        self.balance_at_drawdown = 0
+        # last ATH
+        self.last_ath = 0
+        # last ATH timestamp
+        self.last_ath_timestamp = 0
 
     # Make the required data to display wallet
     def make_data(self):
         # Total number of trades
-        self.total_orders = len(self.wallet.order_book.book)
+        self.total_orders = round(len(self.wallet.wallet_frame["timestamp"]) - 1)
         # return if there were no trades
         if self.total_orders == 0:
             return
 
         # --- Total Profit ---
-        self.profit = self.wallet.coin_balance - self.wallet.ini_coin_balance
+        self.profit = self.wallet.wallet_frame.iloc[-1]["coin_balance"] - self.wallet.coin_balance
+
         # Profit in percent depending of initial coin balance
-        self.percent_profit = divide(100 * self.profit, self.wallet.ini_coin_balance)
+        self.percent_profit = divide(100 * self.profit, self.wallet.coin_balance)
+
+        # --- Splitting ---
+        orders = \
+            self.wallet.wallet_frame.loc[self.wallet.wallet_frame["order_type"] != "blank"].reset_index(drop=True)
 
         # --- Orders ---
-        for order in self.wallet.order_book.book:
-
-            # Count positive & negative trades and collect data to make average positive & negative trades profit
-            if order.type == "buy":
+        for index, row in orders.iterrows():
+            # Get the sell order
+            if row["order_type"] == "BUY":
                 self.total_buy_orders += 1
-            elif order.type == "sell":
+            elif row["order_type"] == "SELL":
                 self.total_sell_orders += 1
 
+        ath = self.wallet.wallet_frame["equivalence"][1]
+        ath_timestamp = self.wallet.dataframe["timestamp"][1]
+
+        # Iteration in dataframe
+        for index, row in self.wallet.wallet_frame.iterrows():
+            if row["timestamp"] != "blank":
+                balance = row["equivalence"]
+                if balance >= ath:
+                    ath = balance
+                    ath_timestamp = row["timestamp"]
+                else:
+                    drawdown = -(divide(100 * (ath - balance), ath))
+                    if drawdown < self.drawdown:
+                        self.drawdown = drawdown
+                        self.balance_at_drawdown = balance
+                        self.drawdown_timestamp = row["timestamp"]
+                        self.last_ath = ath
+                        self.last_ath_timestamp = ath_timestamp
+
         # Last timestamp of the period
-        self.end = self.wallet.dataframe['timestamp'][len(self.wallet.dataframe['timestamp']) - 1]
+        self.end = self.wallet.wallet_frame.iloc[-1]["timestamp"]
         # First timestamp of the period
-        self.start = self.wallet.dataframe['timestamp'][0]
+        self.start = self.wallet.dataframe.iloc[0]["timestamp"]
         # Total days from first timestamp to the last one
         self.total_inday_trading_time = divide(int(self.end - self.start), 86400000)
         # First close price of the dataframe
-        self.first_price = self.wallet.dataframe['close'][0]
+        self.first_price = self.wallet.dataframe.iloc[0]["close"]
         # Last close price of the dataframe
-        self.last_price = self.wallet.dataframe['close'][len(self.wallet.dataframe['close']) - 1]
+        self.last_price = self.wallet.dataframe.iloc[-1]["close"]
         # Profit with buy & hold
-        self.buy_and_hold_profit = divide(self.wallet.ini_coin_balance * self.last_price, self.first_price)
+        self.buy_and_hold_profit = divide(self.wallet.wallet_frame.iloc[0]["coin_balance"] * self.last_price,
+                                          self.first_price)
         # Profit with buy & hold in %
         self.buy_and_hold_percent_profit = divide(100 * self.last_price, self.first_price)
         # Strategy performance vs buy & hold
@@ -689,7 +720,7 @@ class AsymmetricDataHandler:
         # --- Intro ---
 
         print(Colors.PURPLE + "----------------------------------------------------")
-        print("Data from", parse_timestamp(self.start), "to", parse_timestamp(self.end))
+        print("Data from", parse_timestamp(int(self.start)), "to", parse_timestamp(int(self.end)))
         print("Total trading time:", str(round(self.total_inday_trading_time, 2)), "day(s)")
         print("----------------------------------------------------")
 
@@ -697,13 +728,15 @@ class AsymmetricDataHandler:
         # title
         print(Colors.YELLOW + "[-Wallet-]")
         # Initial coin balance
-        print(Colors.LIGHT_BLUE, "Initial", self.wallet.coin_name, round(float(self.wallet.ini_coin_balance), 3))
+        print(Colors.LIGHT_BLUE, "Initial", self.wallet.coin_name, round(float(self.wallet.coin_balance), 3))
         # Final coin balance
-        print(Colors.LIGHT_BLUE, "Final", self.wallet.coin_name, round(float(self.wallet.coin_balance), 3))
+        print(Colors.LIGHT_BLUE, "Final", self.wallet.coin_name,
+              round(float(self.wallet.wallet_frame.iloc[-1]["coin_balance"]), 3))
         # Initial token balance
-        print(Colors.LIGHT_BLUE, "Initial", self.wallet.token_name, round(float(self.wallet.ini_token_balance), 3))
+        print(Colors.LIGHT_BLUE, "Initial", self.wallet.token_name, round(float(self.wallet.token_balance), 3))
         # Final token balance
-        print(Colors.LIGHT_BLUE, "Final", self.wallet.token_name, round(float(self.wallet.token_balance), 6))
+        print(Colors.LIGHT_BLUE, "Final", self.wallet.token_name,
+              round(float(self.wallet.wallet_frame.iloc[-1]["token_balance"]), 3))
 
         # Profit
         if self.profit == 0:
@@ -721,8 +754,10 @@ class AsymmetricDataHandler:
               str(round(self.average_percent_profit_per_day, 2)) + "%")
 
         # Fees
-        print(Colors.LIGHT_RED, "Fees: ", round(float(self.wallet.total_fees), 3), self.wallet.coin_name, "/",
-              str(round(divide(100 * float(self.wallet.total_fees), self.wallet.coin_balance), 2)) + "%")
+        print(Colors.LIGHT_RED, "Fees: ", round(float(self.wallet.wallet_frame.iloc[-1]["total_fees"]), 3),
+              self.wallet.coin_name, "/", str(round(divide(100 * float(self.wallet.wallet_frame.iloc[-1]["total_fees"]),
+                                                           self.wallet.wallet_frame.iloc[-1]["coin_balance"]),
+                                                    2)) + "%")
 
         # Buy & hold profit
         if self.buy_and_hold_profit == 0:
@@ -772,9 +807,9 @@ class AsymmetricDataHandler:
         manager2.set_sub_title("Balance (" + self.wallet.coin_name + ")", target="y", sub=2)
 
         # Total number of trades
-        total_trades = self.wallet.order_book.last_position_index + 1
+        total_orders = len(self.wallet.wallet_frame["timestamp"])-1
         # Cancel plotting if there are no trades
-        if total_trades == 0:
+        if total_orders == 0:
             print(Colors.YELLOW, "No trades found, plotting canceled")
             return
 
@@ -786,15 +821,26 @@ class AsymmetricDataHandler:
         sell_prices = []
         # Price at buy orders
         buy_prices = []
+        # timestamps
+        timestamps = []
+        # equivalence
+        equivalence = []
 
         # Build sell and buy orders timestamps and prices
-        for order in self.wallet.order_book.book:
-            if order.type == "buy":
-                buy_timestamps.append(order.timestamp)
-                buy_prices.append(order.price)
-            elif order.type == "sell":
-                sell_timestamps.append(order.timestamp)
-                sell_prices.append(order.price)
+        orders = self.wallet.wallet_frame.loc[self.wallet.wallet_frame["timestamp"] != "blank"]
+        # --- Orders ---
+        for index, row in orders.iterrows():
+            # Get the sell order
+            if row["order_type"] == "BUY":
+                buy_timestamps.append(row["timestamp"])
+                timestamps.append(row["timestamp"])
+                buy_prices.append(row["price"])
+                equivalence.append(row["equivalence"])
+            elif row["order_type"] == "SELL":
+                sell_timestamps.append(row["timestamp"])
+                timestamps.append(row["timestamp"])
+                sell_prices.append(row["price"])
+                equivalence.append(row["equivalence"])
 
         # Graph 1 Sub 1 - Price
         manager1.plot_price(dataframe=self.wallet.dataframe)
@@ -823,7 +869,7 @@ class AsymmetricDataHandler:
                              marker_size=size)
 
         # Graph 2 Sub 2 - Wallet
-        manager2.draw_line(list(self.wallet.dataframe["timestamp"]), list(self.wallet.dataframe["balance"]),
+        manager2.draw_line(timestamps, equivalence,
                            line_color="darkblue", line_width=3, row=2)
 
         manager1.show()

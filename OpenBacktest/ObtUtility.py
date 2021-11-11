@@ -1,6 +1,7 @@
 from decimal import Decimal
 from binance.client import Client
 from datetime import datetime
+import pandas as pd
 
 
 # --------------------------
@@ -51,15 +52,13 @@ timeframes = {
 def divide(a, b):
     if b == 0:
         return None
-    return float(Decimal(a)/Decimal(b))
+    return float(Decimal(a) / Decimal(b))
 
 
 # used to apply the fees of a transaction to an amount of coins
-def remove_fees(coin, fees, wallet=None):
+def remove_fees(coin, fees):
     fee = coin * fees
-    if wallet is not None:
-        wallet.total_fees += fee
-    return coin - fee
+    return fee
 
 
 # Used to parse timestamp into human readable date
@@ -84,3 +83,43 @@ def pull(var, index):
         return var[index]
     else:
         return var
+
+
+# create a blank dataframe
+def initialise_dataframe(columns):
+    data = {}
+    for col in columns:
+        data[col] = []
+    return pd.DataFrame(data)
+
+
+# append a row to the dataframe
+def append_dataframe(dataframe, values):
+    return dataframe.append(values, ignore_index=True)
+
+
+# return the last row of the dataframe
+def get_last_row(dataframe):
+    return dataframe.iloc[-1]
+
+
+# check if the wallet_frame is symmetric or asymmetric
+def check_wallet_frame(wallet_frame):
+    first = wallet_frame.iloc[1]["order_type"]
+    last = None
+    last_amount = 0
+    for index, row in wallet_frame.iterrows():
+        if row["order_type"] != "blank":
+            if last is None:
+                last = row["order_type"]
+                last_amount = round(row["size"], 2)
+                if last != first:
+                    return False
+            elif last == row["order_type"] or last_amount != round(row["size"], 2):
+                print("returning because other")
+                return False
+            else:
+                last = None
+                last_amount = 0
+    return True
+
