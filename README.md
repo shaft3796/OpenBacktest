@@ -144,4 +144,4 @@ engine.wallet.get_data_handler().plot_wallet()
 <img src="https://cdn.discordapp.com/attachments/901790872033714216/908336484149510165/unknown.png" alt="drawing" width="800"/>
 <img src="https://cdn.discordapp.com/attachments/901790872033714216/908336590319943740/unknown.png" alt="drawing" width="1000"/>
 
-*Next part is coming soon*
+OpenBacktest C++ is coming soon
