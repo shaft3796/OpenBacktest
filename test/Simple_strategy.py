@@ -1,16 +1,16 @@
 # ------------------------------------------------------------------
 # Let's show you how to run a very simple strategy !
-# First of all, let's see all our imports
+# First, let's see all our imports
 # ------------------------------------------------------------------
 
 # The library Technical Analyse is already included when installing open backtest
-# it allow to add a lot of indicators very useful for trading strategy
+# it allows to add a lot of indicators very useful for trading strategy
 from ta import trend, momentum
 
 # Let's import here 4 classes of Open Backtest we will later see how to use it
 from OpenBacktest.ObtEngine import Engine, Container, Pair, Report
 
-# Python Binance is also included with Open Backtest it allow us to get the market data
+# Python Binance is also included with Open Backtest it allows us to get the market data
 from binance.client import Client
 
 # ------------------------------------------------------------------
@@ -29,10 +29,10 @@ container = Container()
 # the path is the location of files that already exist or
 # the location of futures files that will be saved, this parameter is optional.
 
-# We register here our main pair ! The data will be get for the pair Ethereum - Usdt from the 01 january 2021 to now
+# We register here our main pair ! The data will be got for the pair Ethereum - Usdt from the 01 january 2021 to now
 # with candles of 1 hour
 container.add_main_pair(
-    Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1HOUR, name="ETHUSDT",
+    Pair(market_pair="ETHUSDT", start="01 january 2021", timeframe=Client.KLINE_INTERVAL_1DAY, name="ETHUSDT",
          path=""))
 
 # Let's now initialise our engine with our container

@@ -1,14 +1,11 @@
 import os
-
 import pandas as pd
 from binance.client import Client
-
 from OpenBacktest.ObtUtility import Colors, timeframes, divide
-
-# Define a symmetric backtest engine
 from OpenBacktest.ObtWallet import Wallet
 
 
+# Define a symmetric backtest engine
 class Engine:
     # Initialising the class
     def __init__(self, container, output=True):
@@ -132,83 +129,6 @@ class Engine:
         if self.sl is not None and self.sl >= price:
             self.wallet.sell(index)
             self.sl = None
-
-
-# Define an asymmetric backtest engine
-class AsymmetricEngine:
-    # Initialising the class
-    def __init__(self, container, output=True):
-        if output:
-            print(Colors.PURPLE + "Initialising BackTest Engine")
-
-        # Container
-        self.container = container
-        self.container.load_all(output=output)
-
-        # python-binance client
-        self.client = Client()
-
-        # Used to run a backtest
-        self.strategy = None
-        self.wallet = None
-
-        # balance ( used for balance graph plotting )
-        self.balance = []
-
-    # get the main dataframe
-    def main_dataframe(self):
-        return self.container.main.dataframe
-
-    # get an alt dataframe with his name
-    def alt_dataframe(self, name):
-        return self.container.get_pair(name).dataframe
-
-    # -------------------------------------------------------------------------------
-    # def backtest parameters to run an asymmetric strategy
-    def register_strategy(self, strategy):
-        self.strategy = strategy
-
-    # run an asymmetric strategy
-    def run_strategy(self, coin_name, token_name, coin_balance, token_balance, taker, maker, finish=True):
-        # condition not None test
-        if self.strategy is None:
-            print(Colors.RED + "Error, you can't run a backtest because you don't have a strategy function registered")
-            return
-
-        # Wallet initialisation
-        self.wallet = AsymmetricWallet(coin_name, token_name, coin_balance, token_balance, taker, maker,
-                                       self.main_dataframe())
-        # Ini
-        index = 0
-
-        # Main loop
-        while index <= self.container.main.max_index:
-
-            # main
-            report = self.strategy(self.main_dataframe(), index)
-            if report is not None:
-                if report.order == "buy":
-                    self.wallet.buy(index, report.amount, report.percent_amount)
-                elif report.order == "sell":
-                    self.wallet.sell(index, report.amount, report.percent_amount)
-
-            # update balance
-            self.balance.append(self.wallet.get_current_wallet_value(index))
-
-            # end
-            index += 1
-
-        self.main_dataframe()["balance"] = self.balance
-
-        # Sell all remaining coins
-        if self.wallet.token_balance > 0 and finish:
-            self.wallet.sell(self.container.main.max_index)
-
-    # -------------------------------------------------------------------------------
-
-    # get a custom dataframe
-    def get_sub_dataframe(self, name):
-        return self.container.get_pair(name).dataframe
 
 
 # define a pair
