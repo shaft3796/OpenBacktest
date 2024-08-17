@@ -2,6 +2,8 @@
 
 <img src="https://cdn.discordapp.com/attachments/901790872033714216/901790945127841862/IMG_2895.JPG" alt="drawing" width="300"/>
 
+**This project is no longer maintained**
+
 ### Open source & beginner friendly crypto trading backtest library
 - [French page](https://github.com/Shaft-3796/OpenBacktest/blob/master/README-FRA.md)
 
@@ -11,18 +13,6 @@
 ```
 pip install open-backtest
 ```
-### Wanna contact me ? 👋
-
-https://discord.gg/wfpGXvjj9t
-
-### Wanna support my work ? 💰
-
-- paypal: *sh4ft.me@gmail.com*
-- usdt (ERC20): *0x17B516E9cA55C330B6b2bd2830042cAf5C7ecD7a*
-- btc: *34vo6zxSFYS5QJM6dpr4JLHVEo5vZ5owZH*
-- eth: *0xF7f87bc828707354AAfae235dE584F27bDCc9569*
-
-*thanks if you do it 💖*
 
 ## What is it ? 📈
 
@@ -139,9 +129,3 @@ engine.wallet.get_data_handler().plot_wallet()
 # And that's finish ! Hope you like and that it wasn't hard ! If you have any question dm me on discord: Shaft#3796
 # -----------------------------------------------------------------------------------------------------------------
 ```
-
-<img src="https://cdn.discordapp.com/attachments/901790872033714216/908336432760889404/unknown.png" alt="drawing" width="800"/>
-<img src="https://cdn.discordapp.com/attachments/901790872033714216/908336484149510165/unknown.png" alt="drawing" width="800"/>
-<img src="https://cdn.discordapp.com/attachments/901790872033714216/908336590319943740/unknown.png" alt="drawing" width="1000"/>
-
-OpenBacktest C++ is coming soon
